@@ -32,6 +32,12 @@
 count
 
 #
+# checkpoint files
+#
+*.dmtcp
+dmtcp_restart_script*.sh
+
+#
 # editor/temp files
 #
 *~
