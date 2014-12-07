@@ -126,12 +126,47 @@
 \begin{frame}
 \frametitle{The problem}
 
+\begin{enumerate}
+\item You test out your newly developed software on a small dataset.
+\item All is well, you submit a big job and go read some papers, watch
+  some TV, or read a book.
+\item Several days later, one of the following happens:
+  \begin{itemize}
+  \item{Someone else uses up all the memory on the system.}
+  \item{Power failure}
+  \item{Unplanned maintenance}
+  \item{???}
+  \end{itemize}
+\end{enumerate}
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{frame}
 \frametitle{Ad-hoc solutions}
+\framesubtitle{i.e. dodgy, incomplete, and error-prone solutions}
+
+\begin{itemize}
+\item{Save data every N iterations}
+  \begin{itemize}
+  \item{Takes time to code.}
+  \item{May miss some data.}
+  \item{Have to write custom resume code.}
+  \item{For all of these, different sections of the program may need
+    different \textit{save} and \textit{restore} procedures.}
+  \end{itemize}  
+  \item{For some tasks: run on discrete chunks of data.}
+    \begin{itemize}
+    \item{Works best when}
+      \begin{itemize}
+      \item{There are many data items.}
+      \item{Each item is fast to process.}
+      \item{There are no dependencies between items.}
+      \end{itemize}
+    \item{In short, embarrassingly parallel programs can use simple book-keeping for C/R}.
+    \item{Still, it involves some work on the part of the researcher.}
+  \end{itemize}
+\end{itemize}
 
 \end{frame}
 
@@ -153,20 +188,22 @@
 \begin{frame}
 \frametitle{What is C/R?}
 
+Think of virtual machines: if you've ever saved and restarted a virtual machine
+or emulator, you have used a type of C/R!
+
 \begin{block}{Checkpoint: save the program state}
-.\\
+  Program memory, open file descriptors, open sockets, process ids (PIDs), UNIX pipes,
+  shared memory segments, etc.\\
 \vspace{1ex}
-.\\
-\vspace{1ex}
-.\\
+For distributed processes, need to coordinate checkpointing across processes.\\
 \end{block}
 
 \begin{block}{Restart: restart process with saved state}
-.\\
+  Some of the above require special permissions to restore (e.g. PIDs); not all
+  C/R models can accomodate this. Others (like VMs) get it for free.\\
 \vspace{1ex}
-.\\
-\vspace{1ex}
-.\\
+  Some of the above may be impossible to restore in certain contexts (e.g. sockets
+  that have closed and cannot be re-established.\\
 \end{block}
 
 
@@ -174,6 +211,27 @@
   
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+
+\begin{frame}
+\frametitle{Use cases of C/R}
+
+\begin{itemize}
+  \item{Recovery/fault tolerance (restart after a crash).}
+  \item{Save scientific interactive session: R, MATLAB, IPython, etc.}
+  \item{Skip long initialization times.}
+  \item{Interact and analyze results of in-progress CPU-intensive process.}
+  \item{Debugging}
+    \begin{itemize}
+    \item{Checkpoint image for ultimate in reproducibility.}
+    \item{Make an existing debugger reversible.}
+    \end{itemize}
+  \item{Migrate processes (or entire VMs, as in Red Cloud).}
+  \item{Meta-programming through speculative execution.}
+\end{itemize}
+    
+\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -269,7 +327,7 @@
 
 % left: requirements (also add which solutions are precluded for each item)
 
-% right: bonuses (no source modification/recompile)
+% right: bonuses (no source modification/recompile), low overhead
 
 
 \end{frame}
@@ -431,6 +489,9 @@ Custom plugins could add support for callbacks in user's program.\\
 
 %
 \end{columns}
+
+\vspace{0.4in}
+Questions? E-mail: \url{brandon.barker@cornell.edu}
 \end{frame}
 
   
