@@ -200,7 +200,7 @@ For distributed processes, need to coordinate checkpointing across processes.\\
 
 \begin{block}{Restart: restart process with saved state}
   Some of the above require special permissions to restore (e.g. PIDs); not all
-  C/R models can accomodate this. Others (like VMs) get it for free.\\
+  C/R models can accommodate this. Others (like VMs) get it for free.\\
 \vspace{1ex}
   Some of the above may be impossible to restore in certain contexts (e.g. sockets
   that have closed and cannot be re-established.\\
@@ -219,7 +219,7 @@ For distributed processes, need to coordinate checkpointing across processes.\\
   \item{Recovery/fault tolerance (restart after a crash).}
   \item{Save scientific interactive session: R, MATLAB, IPython, etc.}
   \item{Skip long initialization times.}
-  \item{Interact and analyze results of in-progress CPU-intensive process.}
+  \item{Interact with and analyze results of in-progress CPU-intensive process.}
   \item{Debugging}
     \begin{itemize}
     \item{Checkpoint image for ultimate in reproducibility.}
@@ -244,7 +244,7 @@ For distributed processes, need to coordinate checkpointing across processes.\\
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{frame}
-\frametitle{Virutal Machine (VM) C/R}
+\frametitle{Virtual Machine (VM) C/R}
 VM-level C/R is relatively easy to implement, once you have a VM: the
 system is already isolated.
 \begin{columns}[t]
@@ -276,10 +276,15 @@ resources.
   
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\frame{
+\begin{frame}
 \frametitle{Let's have a look at Virtual Box...}
 
-}
+{\only<1>{}}
+{\only<2>{Note that all other solutions are currently Linux-dependent,
+though some claim other UNIX systems could be \textit{easily}
+supported.}}
+
+\end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -305,7 +310,8 @@ kernel to run multiple, seemingly isolated, OS environments.
 \column{.5\textwidth}
 \ul{\textit{Cons}}
 \begin{itemize}
-\item \textit{May} incur additional overhead, due to C/R of unnecessary processes and storage.
+\item \textit{May} incur additional overhead, due to C/R of
+unnecessary processes and storage.
 \item Still a challenge for multi-VM C/R.
 \end{itemize}
 
@@ -358,7 +364,7 @@ Checkpoint one or several interacting processes. Does not use the full container
 \begin{itemize}
 \item \textbf{BLCR}
 \item \textbf{CRIU}
-\item \textbf{DMTCP}
+\item \textbf{DMTCP} - Distributed MultiThreaded CheckPointing
 \end{itemize}
 
 \ul{\textit{Pros}}
@@ -477,7 +483,7 @@ It looks like DMTCP is the best candidate, for now.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                               %
-\section{DMTCP Case Study}    %
+\section{DMTCP}        %
                               %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -493,6 +499,23 @@ It looks like DMTCP is the best candidate, for now.
 \begin{frame}
 \frametitle{An overview of DMTCP}
 
+\begin{itemize}
+\item Distributed MultiThreaded CheckPointing.
+  \begin{itemize}
+  \item Threads (OpenMP, POSIX threads), OpenMPI.
+  \end{itemize}
+\item Easy to build and install library.
+\item Not necessary to link with existing \ul{dynamically} linked
+applications.
+  \begin{itemize}
+  \item DMTCP libs replace (wrap) standard libs and syscalls.
+  \item DMTCP lib directory should be in \texttt{LD\_LIBRARY\_PATH}.
+  \end{itemize}
+\item We are still evaluating; need to verify support for other MPI
+implementations.
+\item They are looking for a Ph.D. student.
+\end{itemize}
+
 % stands for ...
 
 % features, limitations
@@ -501,11 +524,11 @@ It looks like DMTCP is the best candidate, for now.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\begin{frame}
-\frametitle{Configuring and installing DMTCP}
+% \begin{frame}
+% \frametitle{Configuring and installing DMTCP}
 
 
-\end{frame}
+% \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -544,6 +567,10 @@ int main(void) {
 
 \column{.4\textwidth}
 
+\begin{itemize}
+\item \texttt{dmtcp\_checkpoint -i 5 ./count}
+\item \texttt{dmtcp\_restart ckpt\_count\_xxx.dmtcp}
+\end{itemize}
 
 \end{columns}
 
@@ -573,6 +600,10 @@ while (true) {
 
 \column{.4\textwidth}
 
+\begin{itemize}
+\item \texttt{dmtcp\_checkpoint -i 5 perl count.pl}
+\item \texttt{dmtcp\_restart ckpt\_perl\_xxx.dmtcp}
+\end{itemize}
 
 \end{columns}
 
@@ -583,13 +614,19 @@ while (true) {
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                               %
-\subsection{AdvancedDMTCP}    % 
+\subsection{Advanced DMTCP}   % 
                               %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{frame}
 \frametitle{X11 (graphics) support}
 
+\begin{itemize}
+\item All current non-VM C/R relies on VNC for X11 support.
+\item DMTCP has a known bug with checkpointing \texttt{xterm}.
+\item Due to dependence on VNC and general complications, only
+try to use if you have to.
+\end{itemize}
 % Also mention BLCR and BLCR kernel caveat here?
 
 \end{frame}
@@ -600,11 +637,13 @@ while (true) {
 \begin{frame}
 \frametitle{Reversible Debugging with FReD}
 
-% supports GDB and several interpreters
-
-% https://github.com/fred-dbg/fred
-
-% youtube reference http://youtu.be/1l_wGZz0JEE
+\begin{itemize}
+\item Supports GDB and several interpreters.
+\item Allows you to inspect one part of the program, then
+go back to a previous state without restarting the debugger.
+\item \url{github.com/fred-dbg/fred}
+\item \url{youtu.be/1l_wGZz0JEE}
+\end{itemize}
 
 \end{frame}
 
