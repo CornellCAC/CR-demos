@@ -236,7 +236,7 @@ For distributed processes, need to coordinate checkpointing across processes.\\
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                               %
-\subsection{Types of C/R}     %
+\subsection{Types of C/R}   %
                               %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -245,20 +245,61 @@ For distributed processes, need to coordinate checkpointing across processes.\\
 
 \begin{frame}
 \frametitle{Virutal Machine (VM) C/R}
+VM-level C/R is relatively easy to implement, once you have a VM: the
+system is already isolated.
+\begin{columns}[t]
+\column{.5\textwidth}
+\ul{\textit{Implementations}}
+\begin{itemize}
+\item Most any hypervisor platform: KVM, Virtualbox, VMWare, etc.
+\item KVM is relatively lightweight; this is what we use on Red Cloud.
+\end{itemize}
 
-% left: Summary and implementations
+\ul{\textit{Pros}}
+\begin{itemize}
+\item Very simple to use.
+\item Few suprises.
+\item Many applications supported; few limitations.
+\end{itemize}
 
-% right: pros and cons 
+\column{.5\textwidth}
+\ul{\textit{Cons}}
+\begin{itemize}
+\item Operating in a VM context requires predefined partitioning of RAM and CPU
+resources.
+\item More overhead in most catgeories (storage of VM image, RAM snapshot, etc.).
+\item Still a challenge for multi-VM C/R.
+\end{itemize}
 
+\end{columns}
+\end{frame}
+  
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\frame{
+\frametitle{Let's have a look at Virtual Box...}
+
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{frame}
+\frametitle{Containers with C/R}
+
+% CRIU  and OpenVZ. 
 
 \end{frame}
   
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
 \begin{frame}
-\frametitle{Operating System (OS) C/R}
+\frametitle{Kernel-based C/R}
 
+Requires kernel modules or kernel patches to run.
+
+% CRIU, BLCR and OpenVZ.
+% CRIU is in mainline kernel.
+% BLCR does not work for newer kernels (past 3.7.1). 
 % left: Summary and implementations
 
 % right: pros and cons 
@@ -271,6 +312,7 @@ For distributed processes, need to coordinate checkpointing across processes.\\
 \begin{frame}
 \frametitle{(Multi) application C/R}
 
+Checkpoint one or several interacting processes. Does not usre the full container model.
 % requires API
 
 % versatile?
@@ -286,9 +328,9 @@ For distributed processes, need to coordinate checkpointing across processes.\\
 
 
 \begin{frame}
-\frametitle{Library-based (OS) C/R}
-
-% requires API
+\frametitle{Library-wrapper C/R}
+% BLCR and DMTCP
+% DMTCP similar in function to BLCR, but doesn't require kernel module.
 
 % versatile?
 
@@ -378,16 +420,65 @@ For distributed processes, need to coordinate checkpointing across processes.\\
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\begin{frame}
+\begin{frame}[fragile]
 \frametitle{Counting in C}
 
+\begin{columns}[t]
+\column{.6\textwidth}
+
+\begin{lstlisting}[basicstyle=\ttfamily, language=C, showstringspaces=false]
+
+//Counting slowly
+
+#include <stdio.h>
+#include <unistd.h>
+
+int main(void) {
+  unsigned long i = 0;
+  while (1) {
+    printf("%lu ", i);
+    i = i + 1;
+    sleep(1);
+    fflush(stdout);
+  } 
+} 
+
+\end{lstlisting}
+
+\column{.4\textwidth}
+
+
+\end{columns}
 
 \end{frame}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\begin{frame}
+\begin{frame}[fragile]
 \frametitle{Counting in Perl}
+
+\begin{columns}[t]
+\column{.6\textwidth}
+
+\begin{lstlisting}[basicstyle=\ttfamily, language=Perl, showstringspaces=false]
+
+#Counting slowly
+
+$| = 1; # autoflush STDOUT
+
+$i = 0;
+while (true) {
+  print "$i ";
+  $i = $i + 1;
+  sleep(1);
+}
+\end{lstlisting}
+
+\column{.4\textwidth}
+
+
+\end{columns}
+
 
 \end{frame}
 
@@ -446,7 +537,7 @@ Custom plugins could add support for callbacks in user's program.\\
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                               %
-\section{Closing}             %
+\section{Closing}           %
                               %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -456,6 +547,18 @@ Custom plugins could add support for callbacks in user's program.\\
 \subsection{Conclusions}
 \begin{frame}
 \frametitle{Conclusions}
+
+\begin{itemize}
+\item DMTCP appears to be good for most jobs for now. Also easy to install.
+\item CRIU will likely be a strong contender in the future, but is not
+yet ready for HPC.
+\item BLCR and OpenVZ may be more robust than DMTCP for PID restoration (provided
+your kernel has support for BLCR or OpenVZ).
+\item For the forseeable future, it is unlikely that any one C/R framework
+will meet everyone's needs.
+
+
+\end{itemize}
 
 \end{frame}
 
@@ -479,6 +582,7 @@ Custom plugins could add support for callbacks in user's program.\\
 \ul{\textit{References}}
 \begin{itemize}
 \item Python and DMTCP: \url{youtu.be/1l_wGZz0JEE}
+\item Comparison Chart: \url{criu.org/Comparison_to_other_CR_projects}
 \end{itemize}
 
 \vspace{0.4in}
