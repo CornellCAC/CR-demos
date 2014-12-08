@@ -285,25 +285,63 @@ resources.
 
 \begin{frame}
 \frametitle{Containers with C/R}
+Containers are a form of virtualization that uses a single OS
+kernel to run multiple, seemingly isolated, OS environments.
+\begin{columns}[t]
+\column{.5\textwidth}
+\ul{\textit{Implementations}}
+\begin{itemize}
+\item \textbf{OpenVZ}
+\item \textbf{CRIU} - Checkpoint/Restore In Userspace
+\item Not all containers support C/R.
+\end{itemize}
 
-% CRIU  and OpenVZ. 
+\ul{\textit{Pros}}
+\begin{itemize}
+\item Like VMs, enjoys the benefit of existing virtualization.
+\item \textit{Fewer} suprises.
+\end{itemize}
+
+\column{.5\textwidth}
+\ul{\textit{Cons}}
+\begin{itemize}
+\item \textit{May} incur additional overhead, due to C/R of unnecessary processes and storage.
+\item Still a challenge for multi-VM C/R.
+\end{itemize}
+
+\end{columns}
 
 \end{frame}
   
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{frame}
-\frametitle{Kernel-based C/R}
+\frametitle{Kernel-modifying C/R}
 
 Requires kernel modules or kernel patches to run.
 
-% CRIU, BLCR and OpenVZ.
-% CRIU is in mainline kernel.
-% BLCR does not work for newer kernels (past 3.7.1). 
-% left: Summary and implementations
+\begin{columns}[t]
+\column{.5\textwidth}
+\ul{\textit{Implementations}}
+\begin{itemize}
+\item \textbf{OpenVZ}
+\item \textbf{BLCR} - Berkeley Lab Checkpoint/Restart 
+\item \textbf{\st{CRIU}} - But now in mainline!
+\end{itemize}
 
-% right: pros and cons 
+\ul{\textit{Pros}}
+\begin{itemize}
+\item Varied.
+\end{itemize}
 
+\column{.5\textwidth}
+\ul{\textit{Cons}}
+\begin{itemize}
+\item Requires modification of the Kernel.
+\item May not work for all kernels (BLCR does not past 3.7.1).
+\end{itemize}
+
+\end{columns}
 
 \end{frame}
   
@@ -312,25 +350,36 @@ Requires kernel modules or kernel patches to run.
 \begin{frame}
 \frametitle{(Multi) application C/R}
 
-Checkpoint one or several interacting processes. Does not usre the full container model.
+Checkpoint one or several interacting processes. Does not use the full container model.
+
+\begin{columns}[t]
+\column{.5\textwidth}
+\ul{\textit{Implementations}}
+\begin{itemize}
+\item \textbf{BLCR}
+\item \textbf{CRIU}
+\item \textbf{DMTCP}
+\end{itemize}
+
+\ul{\textit{Pros}}
+\begin{itemize}
+\item Usually simple to use.
+\end{itemize}
+
+\column{.5\textwidth}
+\ul{\textit{Cons}}
+\begin{itemize}
+\item May have surprises. Interesting apps use different
+advanced feature sets (e.g. IPC), and each package
+will have a different feature set. \textbf{Test first!}
+\item BLCR requires modification of application for static linking.
+\item DMTCP static linking support is experimental.
+\item CRIU is a bit new.
+\end{itemize}
+
+\end{columns}
+
 % requires API
-
-% versatile?
-
-
-% left: Summary and implementations
-
-% right: pros and cons 
-
-\end{frame}
-  
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
-\begin{frame}
-\frametitle{Library-wrapper C/R}
-% BLCR and DMTCP
-% DMTCP similar in function to BLCR, but doesn't require kernel module.
 
 % versatile?
 
@@ -346,9 +395,32 @@ Checkpoint one or several interacting processes. Does not usre the full containe
 \begin{frame}
 \frametitle{Custom C/R}
 
-% left: Summary and implementations
-% (resemblance to ad-hoc C/R, but more disciplined)
-% right: pros and cons 
+This is like ad-hoc, but when you do it even though you know
+other C/R solutions exist.
+\begin{columns}[t]
+\column{.5\textwidth}
+\ul{\textit{Libraries that help}}
+\begin{itemize}
+\item \textbf{(p)HDF5}
+\item \textbf{NetCDF}
+\end{itemize}
+
+\ul{\textit{Pros}}
+\begin{itemize}
+\item Very low over-head.
+\item Few surprises if done properly.
+\end{itemize}
+
+\column{.5\textwidth}
+\ul{\textit{Cons}}
+\begin{itemize}
+\item Needs thorough testing for each app.
+\item Lots of development time.
+\item Less standardization.
+\item Always a chance something is missed.
+\end{itemize}
+
+\end{columns}
 
 
 \end{frame}
@@ -366,6 +438,31 @@ Checkpoint one or several interacting processes. Does not usre the full containe
 
 \begin{frame}
 \frametitle{What is a good C/R solution for HPC?}
+
+\begin{columns}[t]
+\column{.5\textwidth}
+\ul{\textit{Requirements}}
+\begin{itemize}
+\item Must be non-invasive.
+  \begin{itemize}
+  \item No kernel modifications.
+  \item Preferably no libraries needed on nodes.
+  \end{itemize}
+\item Should have low overhead.
+\item Must support distributed applications.
+\end{itemize}
+
+\column{.5\textwidth}
+\ul{\textit{Bonuses}}
+\begin{itemize}
+\item Easy to use.
+\item Stable for the user.
+\end{itemize}
+
+\end{columns}
+
+\vspace{2ex}
+It looks like DMTCP is the best candidate, for now.
 
 % left: requirements (also add which solutions are precluded for each item)
 
