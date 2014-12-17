@@ -48,3 +48,14 @@ make check HAS_JAVA=no HAS_JAVAC=no
 ```
 
 
+## Using DMTCP
+
+Make sure the newly built DMTCP is in your path, e.g.:
+
+```
+export PATH=$PATH:$WORK/dmtcp-2.3.1/bin
+```
+
+Now you can proceed to run examples as described elsewhere in the docs.
+
+
