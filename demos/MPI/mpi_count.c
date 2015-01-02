@@ -21,10 +21,13 @@ int main(int argc, char **argv)
   }
   printf( "Message from process %d : %.13s\n", rank, message);
 
+  //Synchronize output here
+  MPI_Barrier(MPI_COMM_WORLD);
+
   //Proceed to slow counting ...
   unsigned long i = 0;
   while (1) {
-    printf("%lu ", i);
+    printf("%d:%lu ", rank, i);
     i = i + 1;
     sleep(1);
     fflush(stdout);
