@@ -164,7 +164,7 @@
       \item{There are no dependencies between items.}
       \end{itemize}
     \item{In short, embarrassingly parallel programs can use simple book-keeping for C/R}.
-    \item{Still, it involves some work on the part of the researcher.}
+    \item{Still, it involves some work on the part of the researcher for restoration.}
   \end{itemize}
 \end{itemize}
 
@@ -226,7 +226,7 @@ For distributed processes, need to coordinate checkpointing across processes.\\
     \item{Make an existing debugger reversible.}
     \end{itemize}
   \item{Migrate processes (or entire VMs, as in Red Cloud).}
-  \item{Meta-programming through speculative execution.}
+  \item{Robust “exception handling” in languages without exceptions or garbage collectors.}
 \end{itemize}
     
 \end{frame}
@@ -343,7 +343,7 @@ Requires kernel modules or kernel patches to run.
 \column{.5\textwidth}
 \ul{\textit{Cons}}
 \begin{itemize}
-\item Requires modification of the Kernel.
+\item Requires modification of the kernel.
 \item May not work for all kernels (BLCR does not past 3.7.1).
 \end{itemize}
 
@@ -370,6 +370,7 @@ Checkpoint one or several interacting processes. Does not use the full container
 \ul{\textit{Pros}}
 \begin{itemize}
 \item Usually simple to use.
+\item Lower overhead.
 \end{itemize}
 
 \column{.5\textwidth}
@@ -502,18 +503,18 @@ It looks like DMTCP is the best candidate, for now.
 \begin{itemize}
 \item Distributed MultiThreaded CheckPointing.
   \begin{itemize}
-  \item Threads (OpenMP, POSIX threads), OpenMPI.
+  \item Threads (OpenMP, POSIX threads), MPI.
   \end{itemize}
 \item Easy to build and install library.
 \item Not necessary to link with existing \ul{dynamically} linked
 applications.
   \begin{itemize}
   \item DMTCP libs replace (wrap) standard libs and syscalls.
-  \item DMTCP lib directory should be in \texttt{LD\_LIBRARY\_PATH}.
+  \item DMTCP lib directory should be in \texttt{LD\_LIBRARY\_PATH} 
+	\texttt{LD\_PRELOAD} (handled by DMTCP scripts).
   \end{itemize}
 \item We are still evaluating; need to verify support for other MPI
 implementations.
-\item They are looking for a Ph.D. student.
 \end{itemize}
 
 % stands for ...
@@ -690,7 +691,7 @@ Custom plugins could add support for callbacks in user's program.\\
 yet ready for HPC.
 \item BLCR and OpenVZ may be more robust than DMTCP for PID restoration (provided
 your kernel has support for BLCR or OpenVZ).
-\item For the forseeable future, it is unlikely that any one C/R framework
+\item For the foreseeable future, it is unlikely that any one C/R framework
 will meet everyone's needs.
 
 
