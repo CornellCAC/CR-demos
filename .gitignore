@@ -30,12 +30,21 @@
 
 # Named executables
 count
+mpi_count
 
 #
 # checkpoint files
 #
 *.dmtcp
 dmtcp_restart_script*.sh
+
+
+#
+# Job files
+#
+myMPI.o*
+myMPI.err*
+
 
 #
 # editor/temp files
