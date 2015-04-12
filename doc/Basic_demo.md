@@ -12,7 +12,7 @@ for this example. Press `Ctr-C` sometime after the first 5 seconds of
 running with DMTCP to kill the application.
 
 ```
-user@ubuntu:~/CR-demos$ dmtcp_checkpoint -i 5 ./count
+user@ubuntu:~/CR-demos$ dmtcp_launch -i 5 ./count
 dmtcp_coordinator starting...
     Host: ubuntu (127.0.0.1)
     Port: 7779
@@ -26,7 +26,7 @@ Note that you need to specify an absolute or relative path explicitly, i.e.,
 ./count not count, or you will get an error:
 
 ```
-user@ubuntu:~/CR-demos$ dmtcp_checkpoint -i 5 count
+user@ubuntu:~/CR-demos$ dmtcp_launch -i 5 count
 *** ERROR:  Executable to run w/ DMTCP appears not to be readable,
 ***         or no such executable in path.
 ```
@@ -54,7 +54,7 @@ otherwise further intervals checkpointing is disabled (note the warning above).
 We can run the Perl demo very similarly to the C demo:
 
 ```
-user@ubuntu:~/CR-demos$ dmtcp_checkpoint -i 5 perl count.pl 
+user@ubuntu:~/CR-demos$ dmtcp_launch -i 5 perl count.pl 
 dmtcp_coordinator starting...
     Host: ubuntu (127.0.0.1)
     Port: 7779
@@ -69,7 +69,7 @@ script directly will not work:
 
 
 ```
-user@ubuntu:~/CR-demos$ dmtcp_checkpoint -i 5 ./count.pl 
+user@ubuntu:~/CR-demos$ dmtcp_launch -i 5 ./count.pl 
 dmtcp_coordinator starting...
     Host: ubuntu (127.0.0.1)
     Port: 7779

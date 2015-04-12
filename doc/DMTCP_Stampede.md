@@ -34,6 +34,8 @@ login2.stampede(12)$ ln -s -f /home1/apps/intel13/mvapich2-x/2.0b/bin/* ~/mpich/
 This puts symbolic links into one directory to make it possible
 for the existing configure script to find all MPICH executables.
 
+** Need to verify that this is being built with icc unless not possible **
+
 Now we are ready to configure and build (the mpich home should be adjusted appropriately):
 
 ```
@@ -46,6 +48,23 @@ It is a good idea to run `make check`, but due to the Stampede environment being
 ```
 make check HAS_JAVA=no HAS_JAVAC=no
 ```
+
+
+### Building DMTCP for MIC
+
+This requires a slightly different procedure since not only do we need
+to compile for the MIC architecture, but we also need to specify
+different MPI and InfiniBand (?)  libraries. Extract the source to a
+different directory; we'll assume `$WORK/dmtcp-2.3.1-mic`.
+
+
+
+```
+LDFLAGS=-L/opt/ofed/lib64 CFLAGS="-I/opt/ofed/include -mmic" CC=icc CXX=icpc CXXFLAGS=-mmic LDFLAGS=-mmic ./configure --host=mic --enable-infiniband-support --with-mpich=/home1/03135/bebarker/mpich 
+make
+```
+
+
 
 
 ## Using DMTCP
