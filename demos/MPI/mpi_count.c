@@ -1,10 +1,16 @@
-#include <stdio.h> 
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 #include "mpi.h"
+
+#define HOSTNAME_LEN 100
+
 int main(int argc, char **argv) 
 {
-  char message[20];
+  char message[20], hostname[HOSTNAME_LEN];
   int  j, rank, size, tag = 99;
   MPI_Status status;
+  int errno = 0;
 
   MPI_Init(&argc, &argv);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
@@ -19,7 +25,10 @@ int main(int argc, char **argv)
   else {
     MPI_Recv(message, 20, MPI_CHAR, 0, tag, MPI_COMM_WORLD, &status);
   }
-  printf( "Message from process %d : %.13s\n", rank, message);
+
+  errno = gethostname(hostname, HOSTNAME_LEN);
+  printf( "Message from process %d on host %s: %.13s\n", 
+	  rank, hostname, message);
 
   //Synchronize output here
   MPI_Barrier(MPI_COMM_WORLD);
@@ -29,7 +38,7 @@ int main(int argc, char **argv)
   while (1) {
     printf("%d:%lu ", rank, i);
     i = i + 1;
-    sleep(1);
+    sleep(2);
     fflush(stdout);
   } 
 
