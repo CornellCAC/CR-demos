@@ -38,7 +38,7 @@ mpi_count
 #
 *.dmtcp
 dmtcp_restart_script*.sh
-
+ckpt_mpi_count_*_files
 
 #
 # Job files
