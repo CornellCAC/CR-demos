@@ -38,6 +38,7 @@ mpi_count
 #
 *.dmtcp
 dmtcp_restart_script*.sh
+dmtcp_command.*
 ckpt_mpi_count_*_files
 
 #
