@@ -56,6 +56,13 @@ parameters to `dmtcp_command`.
 4. Calls ibrun (the Stampede job runner) on a
 dmtcp_launched mpi_counter: `ibrun dmtcp_launch ./mpi_count `.
 
+Once you've adjusted your script, simply run the script as usual:
+
+```sh
+sbatch mpi_count_with_dmtcp.sh
+```
+
+
 ## Resuming a job with DMTCP
 
 Now you may be wondering, after seeing our previous examples, how the
