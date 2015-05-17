@@ -32,6 +32,7 @@
 # Named executables
 count
 mpi_count
+random_chars
 
 #
 # checkpoint files

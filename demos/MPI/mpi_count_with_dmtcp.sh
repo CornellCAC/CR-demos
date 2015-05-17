@@ -139,4 +139,4 @@ export MV2_USE_LAZY_MEM_UNREGISTER=0
 
 # Now run the executable with the dmtcp_launcher
 
-ibrun dmtcp_launch ./mpi_count
+ibrun dmtcp_launch --no-gzip --ckpt-signal 10 --ib ./mpi_count
