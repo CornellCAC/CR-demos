@@ -33,6 +33,7 @@
 count
 mpi_count
 random_chars
+perfectNumbers
 
 #
 # checkpoint files
