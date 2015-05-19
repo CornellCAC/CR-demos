@@ -17,7 +17,7 @@
 #define DATASETNAME 	"BigIntArray" 
 #define RANK            1   
 
-#define REALLOC_SIZE 10
+#define REALLOC_SIZE 100
 //#define REALLOC_SIZE 10000000
 
 #define big_int_h5 H5T_NATIVE_ULLONG
@@ -53,27 +53,16 @@ int main (int argc, char **argv)
   last_perf = 0;
   num_even = 0;
   num_odd = 0;
-  while(count <= 100) {
-    printf("Entering while loop for the %llu'th time!", count);
+  while(count <= 10000) {
     fflush(stdout);
     count++;
 
     if (is_perfect(count)) {
       last_perf = count;
+      printf("Found %llu!\n", last_perf);
 
       // Might need to allocate more memory to hold new perfect number
-      if (num_even + num_odd % REALLOC_SIZE == 0) {
-        // FIXME: should checkpoint based on count, to account for 
-        // long gaps in perfect numbers
-        // We could checkpoint at a different point than when we realloc,
-        // but for now this is simplest.
-        if (mpi_rank == 0) { // FIXME
-          checkpoint(comm, info, data, num_even, num_odd,  \
-                     last_perf, count);
-        }
-
-	printf("Starting realloc!\n");
-	fflush(stdout);
+      if ((num_even + num_odd) % REALLOC_SIZE == 0) {
 	/*
 	 * Initialize data buffer 
 	 */
@@ -89,14 +78,12 @@ int main (int argc, char **argv)
 	  exit(-1);
 
 	} else {
-	  printf("Finished realloc!\n");
-	  fflush(stdout);
 	  data = data_tmp;
 	  for (ii = num_even + num_odd; ii < num_even + num_odd + REALLOC_SIZE; ii++) {
 	      data[ii] = 0;
 	  }
 	}
-      } // end of ...
+      } // end of [if ((num_even + num_odd) % REALLOC_SIZE == 0)]
 
       if (last_perf % 2 == 0) {
         num_even++;
@@ -104,6 +91,10 @@ int main (int argc, char **argv)
         num_odd++;
       }
       data[num_even + num_odd - 1] = last_perf;
+      // TODO: (for exercise) should ALSO checkpoint based on count, to account for 
+      // long gaps in perfect numbers
+      checkpoint(comm, info, data, num_even, num_odd,  \
+         	 last_perf, count);
     }
 
 
@@ -190,25 +181,25 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,                     \
 
 
 
-// Tells if a given integer is a perfect number: the product of its
+// Tells if a given integer is a perfect number: the sum of its
 // divisors (excluding itself) is equal to itself.
 // 
 // This is toy code. Odd perfect numbers are currently being searched
 // for above 10^300: http://www.oddperfect.org
-// Also see http://rosettacode.org/wiki/Perfect_numbers
-// 
+// Also see : http://rosettacode.org/wiki/Perfect_numbers
+//          : http://en.wikipedia.org/wiki/List_of_perfect_numbers
 bool is_perfect(big_int n) {
   if (n < 2) {
     return false;
   }
-  big_int divisor_product = 1;
-  big_int i = 1;
+  big_int divisor_sum = 1;
+  big_int i;
   for (i = 2; i < n; i++) {
     if (n % i == 0) {
-      divisor_product *= i;
+      divisor_sum += i;
     }
   }
-  if (divisor_product == n) {
+  if (divisor_sum == n) {
     return true;
   }
   return false;
