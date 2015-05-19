@@ -42,6 +42,8 @@ perfectNumbers
 dmtcp_restart_script*.sh
 dmtcp_command.*
 ckpt_mpi_count_*_files
+perfectNumbers.h5
+perfectNumbers.h5.bak
 
 #
 # Job files
