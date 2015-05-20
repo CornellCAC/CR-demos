@@ -22,33 +22,45 @@
 #define MPI_CHUNK_SIZE 10000000
 
 #define big_int_h5 H5T_NATIVE_ULLONG
-typedef unsigned long big_int;
+#define big_int_mpi MPI_UNSIGNED_LONG_LONG
+typedef unsigned long long big_int;
+
+/*
+ * MPI variables
+ */
+int mpi_size, mpi_rank;
+MPI_Comm comm  = MPI_COMM_WORLD;
+MPI_Info info  = MPI_INFO_NULL;
+MPI_Status status;
+MPI_Request last_perf_request = MPI_REQUEST_NULL;
+MPI_Request num_even_request  = MPI_REQUEST_NULL;
+MPI_Request num_odd_request   = MPI_REQUEST_NULL;
+MPI_Request perfs_request     = MPI_REQUEST_NULL;
 
 
-  /*
-   * MPI variables
-   */
-  int mpi_size, mpi_rank;
-  MPI_Comm comm  = MPI_COMM_WORLD;
-  MPI_Info info  = MPI_INFO_NULL;
-
+/*
+ * State variables
+ */ 
+big_int     *perfs = NULL;   /* pointer to data buffer to write */
+big_int     *perfs_tmp = NULL;
+big_int     count, last_perf, num_odd, num_even;
 
 /* Function declarations */
 
-bool is_perfect(unsigned long n);
+big_int perfect_diff(big_int n);
 
 void backup_file();
 
 herr_t checkpoint(MPI_Comm comm, MPI_Info info,
-                  big_int* data, big_int num_even, big_int num_odd, 
+                  big_int* perfs, big_int num_even, big_int num_odd, 
                   big_int last_perf, big_int last_n);
 
+int broadcast_state();
+
+int wait_for_state();
 
 int main (int argc, char **argv)
 {
-  big_int     *data = NULL;   /* pointer to data buffer to write */
-  big_int     *data_tmp = NULL;
-  big_int     count, last_perf, num_odd, num_even;
   int         ii; 
 
   /*
@@ -68,35 +80,36 @@ int main (int argc, char **argv)
     }
   }
   while(true) {
+    printf("Count is %llu!\n", count);
     while(count < count + MPI_CHUNK_SIZE) {
-      printf("Count is %llu!\n", count);
-      if (is_perfect(count)) {
+      if (perfect_diff(count)) {
+        wait_for_state();
 	last_perf = count;
 	printf("Found %llu!\n", last_perf);
 
-	// Might need to allocate more memory to hold new perfect number
+	// Need to allocate more memory to hold new perfect number
 	if ((num_even + num_odd) % REALLOC_SIZE == 0) {
 	  /*
 	   * Initialize data buffer 
 	   */
 
 	  // TODO: note that variable length data arrays can't be used with *p*HDF5
-	  data_tmp = (big_int *) realloc(data, 
-	    (num_even + num_odd + REALLOC_SIZE) * sizeof *data
+	  perfs_tmp = (big_int *) realloc(perfs, 
+	    (num_even + num_odd + REALLOC_SIZE) * sizeof *perfs
 	  );
-	  if (!data_tmp) {
+	  if (!perfs_tmp) {
 	    /* Could not reallocate, checkpoint and exit */
-	    fprintf(stderr, "Couldn't allocate more space for data!\n");
+	    fprintf(stderr, "Couldn't allocate more space for perf data!\n");
 	    fflush(stdout);
-	    free(data);
+	    free(perfs);
 	    MPI_Finalize();
 	    exit(-1);
 
 	  } else {
             /* Initialize data */
-	    data = data_tmp;
+	    perfs = perfs_tmp;
 	    for (ii = num_even + num_odd; ii < num_even + num_odd + REALLOC_SIZE; ii++) {
-		data[ii] = 0;
+		perfs[ii] = 0;
 	    }
 	  }
 	} // end of [if ((num_even + num_odd) % REALLOC_SIZE == 0)]
@@ -106,19 +119,22 @@ int main (int argc, char **argv)
 	} else {
 	  num_odd++;
 	}
-	data[num_even + num_odd - 1] = last_perf;
-	// TODO: (for exercise) should ALSO checkpoint based on count, to account for 
-	// long gaps in perfect numbers
-	checkpoint(comm, info, data, num_even, num_odd, 
-		   last_perf, count);
-      } // end [if (is_perfect(count))]
+	perfs[num_even + num_odd - 1] = last_perf;
+        // Initiate synchronization
+        broadcast_state();
+      } // end [if (perfect_diff(count))]
       count++;
     } // end [while(count < count + MPI_CHUNK_SIZE)]
+    
+    wait_for_state();
+    checkpoint(comm, info, perfs, num_even, num_odd, 
+	       last_perf, count);
+    
     // offset into next iteration
     count += (mpi_size - 1) * MPI_CHUNK_SIZE + 1; 
   } // end [while(true)]
 
-  free(data);
+  free(perfs);
 
   MPI_Finalize();
 
@@ -126,8 +142,9 @@ int main (int argc, char **argv)
 }
 
 
+
 herr_t checkpoint(MPI_Comm comm, MPI_Info info,                 
-                big_int* data, big_int num_even, big_int num_odd, 
+                big_int* perfs, big_int num_even, big_int num_odd, 
                 big_int last_perf, big_int last_n) {
 
   /*
@@ -190,8 +207,8 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   status_id = H5Gcreate(file_id, STATUSGROUP,
 	                H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
-  // Only need to write once, and send the last_n of lowest offset
-  if (rank == (mpi_size - 1)) {
+  // Only need to write these once
+  if (mpi_rank == (mpi_size - 1)) {
     /*
      * Add metadata as attributes 
      */
@@ -231,7 +248,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
 	     H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
 
   status = H5Dwrite(dset_id, big_int_h5, H5S_ALL, H5S_ALL,
-		    plist_id, (const void *) data);
+		    plist_id, (const void *) perfs);
 
   /*
    * Close/release resources.
@@ -248,17 +265,15 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
 
 
 
-// Tells if a given integer is a perfect number: the sum of its
-// divisors (excluding itself) is equal to itself.
+// Tells if a given integer is a perfect number by returning the
+// difference between itself and the sum of its
+// divisors (excluding itself); if the diff is 0, it is perfect.
 // 
 // This is toy code. Odd perfect numbers are currently being searched
 // for above 10^300: http://www.oddperfect.org
 // Also see : http://rosettacode.org/wiki/Perfect_numbers
 //          : http://en.wikipedia.org/wiki/List_of_perfect_numbers
-bool is_perfect(big_int n) {
-  if (n < 2) {
-    return false;
-  }
+big_int perfect_diff(big_int n) {
   big_int divisor_sum = 1;
   big_int i;
   for (i = 2; i < n; i++) {
@@ -274,6 +289,35 @@ bool is_perfect(big_int n) {
 
 
 
+/*
+ * Backs up the last checkpoint; very primitive for now.
+ */
 void backup_file() {
   system(BACKUP_CMD);
+}
+
+
+/*
+ * Broadcasts state updates
+ */
+int broadcast_state() {
+  MPI_Ibcast((void *) &last_perf, 1, big_int_mpi, mpi_rank, comm, &last_perf_request);
+  MPI_Ibcast((void *) &num_even , 1, big_int_mpi, mpi_rank, comm, &num_even_request);
+  MPI_Ibcast((void *) &num_odd  , 1, big_int_mpi, mpi_rank, comm, &num_odd_request);
+  MPI_Ibcast((void *) perfs + (num_even + num_odd - 1) * sizeof perfs
+                                , 1, big_int_mpi, mpi_rank, comm, &perfs_request);
+  return 0; 
+}
+
+
+/*
+ * Waits for state updates
+ */
+int wait_for_state() {
+  MPI_Wait(&last_perf_request, &status);
+  MPI_Wait(&num_even_request,  &status);
+  MPI_Wait(&num_odd_request,   &status);
+  MPI_Wait(&perfs_request,     &status);
+
+  return 0;
 }
