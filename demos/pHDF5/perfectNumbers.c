@@ -313,14 +313,14 @@ void backup_file() {
 /*
  * Broadcasts state updates
  */
-int broadcast_state2() {
-  MPI_Ibcast((void *) &last_perf, 1, big_int_mpi, mpi_rank, comm, &last_perf_request);
-  MPI_Ibcast((void *) &num_even , 1, big_int_mpi, mpi_rank, comm, &num_even_request);
-  MPI_Ibcast((void *) &num_odd  , 1, big_int_mpi, mpi_rank, comm, &num_odd_request);
-  MPI_Ibcast((void *) perfs + (num_even + num_odd - 1) * sizeof perfs
-                                , 1, big_int_mpi, mpi_rank, comm, &perfs_request);
-  return 0; 
-}
+/* int broadcast_state2() { */
+/*   MPI_Ibcast((void *) &last_perf, 1, big_int_mpi, mpi_rank, comm, &last_perf_request); */
+/*   MPI_Ibcast((void *) &num_even , 1, big_int_mpi, mpi_rank, comm, &num_even_request); */
+/*   MPI_Ibcast((void *) &num_odd  , 1, big_int_mpi, mpi_rank, comm, &num_odd_request); */
+/*   MPI_Ibcast((void *) perfs + (num_even + num_odd - 1) * sizeof perfs */
+/*                                 , 1, big_int_mpi, mpi_rank, comm, &perfs_request); */
+/*   return 0;  */
+/* } */
 
 /*
  * Broadcasts state updates
