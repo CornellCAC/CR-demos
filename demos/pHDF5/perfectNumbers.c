@@ -19,22 +19,11 @@
 #define RANK            1   
 
 #define REALLOC_SIZE 100
-//#define REALLOC_SIZE 10000000
+#define MPI_CHUNK_SIZE 10000000
 
 #define big_int_h5 H5T_NATIVE_ULLONG
 typedef unsigned long big_int;
 
-bool is_perfect(unsigned long n);
-void backup_file();
-herr_t checkpoint(MPI_Comm comm, MPI_Info info,
-                  big_int* data, big_int num_even, big_int num_odd, 
-                  big_int last_perf, big_int last_n);
-
-int main (int argc, char **argv)
-{
-  big_int     *data = NULL;   /* pointer to data buffer to write */
-  big_int     *data_tmp = NULL;
-  big_int     ii, count, last_perf, num_odd, num_even;
 
   /*
    * MPI variables
@@ -43,6 +32,25 @@ int main (int argc, char **argv)
   MPI_Comm comm  = MPI_COMM_WORLD;
   MPI_Info info  = MPI_INFO_NULL;
 
+
+/* Function declarations */
+
+bool is_perfect(unsigned long n);
+
+void backup_file();
+
+herr_t checkpoint(MPI_Comm comm, MPI_Info info,
+                  big_int* data, big_int num_even, big_int num_odd, 
+                  big_int last_perf, big_int last_n);
+
+
+int main (int argc, char **argv)
+{
+  big_int     *data = NULL;   /* pointer to data buffer to write */
+  big_int     *data_tmp = NULL;
+  big_int     count, last_perf, num_odd, num_even;
+  int         ii; 
+
   /*
    * Initialize MPI
    */
@@ -50,57 +58,64 @@ int main (int argc, char **argv)
   MPI_Comm_size(comm, &mpi_size);
   MPI_Comm_rank(comm, &mpi_rank);  
 
-  count = 0;
   last_perf = 0;
   num_even = 0;
   num_odd = 0;
-  while(true) {
-    fflush(stdout);
-    count++;
-
-    if (is_perfect(count)) {
-      last_perf = count;
-      printf("Found %llu!\n", last_perf);
-
-      // Might need to allocate more memory to hold new perfect number
-      if ((num_even + num_odd) % REALLOC_SIZE == 0) {
-	/*
-	 * Initialize data buffer 
-	 */
-
-	// TODO: note that variable length data arrays can't be used with *p*HDF5
-	data_tmp = (big_int *) realloc(data, 
-          (num_even + num_odd + REALLOC_SIZE) * sizeof *data
-        );
-	if (!data_tmp) {
-	  /* Could not reallocate, checkpoint and exit */
-	  fprintf(stderr, "Couldn't allocate more space for data!\n");
-	  fflush(stdout);
-	  free(data);
-	  MPI_Finalize();
-	  exit(-1);
-
-	} else {
-	  data = data_tmp;
-	  for (ii = num_even + num_odd; ii < num_even + num_odd + REALLOC_SIZE; ii++) {
-	      data[ii] = 0;
-	  }
-	}
-      } // end of [if ((num_even + num_odd) % REALLOC_SIZE == 0)]
-
-      if (last_perf % 2 == 0) {
-        num_even++;
-      } else {
-        num_odd++;
-      }
-      data[num_even + num_odd - 1] = last_perf;
-      // TODO: (for exercise) should ALSO checkpoint based on count, to account for 
-      // long gaps in perfect numbers
-      checkpoint(comm, info, data, num_even, num_odd, 
-         	 last_perf, count);
+  // Initialize data offsets for each MPI process
+  for(ii = 0; ii < mpi_size, ii++;) {
+    if (mpi_rank == ii) {
+      count = MPI_CHUNK_SIZE * mpi_rank;  
     }
+  }
+  while(true) {
+    while(count < count + MPI_CHUNK_SIZE) {
+      printf("Count is %llu!\n", count);
+      if (is_perfect(count)) {
+	last_perf = count;
+	printf("Found %llu!\n", last_perf);
 
+	// Might need to allocate more memory to hold new perfect number
+	if ((num_even + num_odd) % REALLOC_SIZE == 0) {
+	  /*
+	   * Initialize data buffer 
+	   */
 
+	  // TODO: note that variable length data arrays can't be used with *p*HDF5
+	  data_tmp = (big_int *) realloc(data, 
+	    (num_even + num_odd + REALLOC_SIZE) * sizeof *data
+	  );
+	  if (!data_tmp) {
+	    /* Could not reallocate, checkpoint and exit */
+	    fprintf(stderr, "Couldn't allocate more space for data!\n");
+	    fflush(stdout);
+	    free(data);
+	    MPI_Finalize();
+	    exit(-1);
+
+	  } else {
+            /* Initialize data */
+	    data = data_tmp;
+	    for (ii = num_even + num_odd; ii < num_even + num_odd + REALLOC_SIZE; ii++) {
+		data[ii] = 0;
+	    }
+	  }
+	} // end of [if ((num_even + num_odd) % REALLOC_SIZE == 0)]
+
+	if (last_perf % 2 == 0) {
+	  num_even++;
+	} else {
+	  num_odd++;
+	}
+	data[num_even + num_odd - 1] = last_perf;
+	// TODO: (for exercise) should ALSO checkpoint based on count, to account for 
+	// long gaps in perfect numbers
+	checkpoint(comm, info, data, num_even, num_odd, 
+		   last_perf, count);
+      } // end [if (is_perfect(count))]
+      count++;
+    } // end [while(count < count + MPI_CHUNK_SIZE)]
+    // offset into next iteration
+    count += (mpi_size - 1) * MPI_CHUNK_SIZE + 1; 
   } // end [while(true)]
 
   free(data);
@@ -175,37 +190,39 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   status_id = H5Gcreate(file_id, STATUSGROUP,
 	                H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
-  /*
-   * Add metadata as attributes 
-   */
-  last_perf_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
-  last_perf_id = H5Acreate(status_id, "Last Perfect Number", big_int_h5, 
-                           last_perf_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
-  status = H5Awrite(last_perf_id, big_int_h5, &last_perf);
-  status = H5Aclose(last_perf_id);
-  status = H5Sclose(last_perf_dataspace_id);
-  //
-  last_n_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
-  last_n_id = H5Acreate(status_id, "Last Number Tested", big_int_h5, 
-                        last_n_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
-  status = H5Awrite(last_n_id, big_int_h5, &last_n);
-  status = H5Aclose(last_n_id);
-  status = H5Sclose(last_n_dataspace_id);
-  //
-  num_even_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
-  num_even_id = H5Acreate(status_id, "Number of even perfect numbers found", 
-                          big_int_h5, num_even_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
-  status = H5Awrite(num_even_id, big_int_h5, &num_even);
-  status = H5Aclose(num_even_id);
-  status = H5Sclose(num_even_dataspace_id);
-  //
-  num_odd_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
-  num_odd_id = H5Acreate(status_id, "Number of odd perfect numbers found", big_int_h5, 
-                         num_odd_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
-  status = H5Awrite(num_odd_id, big_int_h5, &num_odd);
-  status = H5Aclose(num_odd_id);
-  status = H5Sclose(num_odd_dataspace_id);
-
+  // Only need to write once, and send the last_n of lowest offset
+  if (rank == (mpi_size - 1)) {
+    /*
+     * Add metadata as attributes 
+     */
+    last_perf_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
+    last_perf_id = H5Acreate(status_id, "Last Perfect Number", big_int_h5, 
+			     last_perf_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+    status = H5Awrite(last_perf_id, big_int_h5, &last_perf);
+    status = H5Aclose(last_perf_id);
+    status = H5Sclose(last_perf_dataspace_id);
+    //
+    last_n_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
+    last_n_id = H5Acreate(status_id, "Last Number Tested ", big_int_h5, 
+			  last_n_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+    status = H5Awrite(last_n_id, big_int_h5, &last_n);
+    status = H5Aclose(last_n_id);
+    status = H5Sclose(last_n_dataspace_id);
+    //
+    num_even_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
+    num_even_id = H5Acreate(status_id, "Number of even perfect numbers found", 
+			    big_int_h5, num_even_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+    status = H5Awrite(num_even_id, big_int_h5, &num_even);
+    status = H5Aclose(num_even_id);
+    status = H5Sclose(num_even_dataspace_id);
+    //
+    num_odd_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
+    num_odd_id = H5Acreate(status_id, "Number of odd perfect numbers found", big_int_h5, 
+			   num_odd_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+    status = H5Awrite(num_odd_id, big_int_h5, &num_odd);
+    status = H5Aclose(num_odd_id);
+    status = H5Sclose(num_odd_dataspace_id);
+  }
 
   /*
    * Create property list for collective dataset write.
@@ -213,18 +230,8 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   plist_id = H5Pcreate(H5P_DATASET_XFER);
 	     H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
 
-  /*
-   * To write dataset independently use
-   *
-   * H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_INDEPENDENT); 
-   */
-
   status = H5Dwrite(dset_id, big_int_h5, H5S_ALL, H5S_ALL,
 		    plist_id, (const void *) data);
-
-//  status = H5Dwrite(dset_id, big_int_h5, H5S_ALL, H5S_ALL,
-//		    plist_id, (const void *) data);
-
 
   /*
    * Close/release resources.
