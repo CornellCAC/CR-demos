@@ -56,6 +56,8 @@ big_int perfect_diff(big_int n);
 
 void backup_file();
 
+void check_and_realloc(big_int num_even, big_int num_odd);
+
 herr_t checkpoint(MPI_Comm comm, MPI_Info info,
                   big_int* perfs, big_int num_even, big_int num_odd, 
                   big_int last_perf, big_int last_n);
@@ -78,6 +80,7 @@ int main (int argc, char **argv)
   last_perf = 0;
   num_even = 0;
   num_odd = 0;
+  check_and_realloc(num_even, num_odd);
   // Initialize data offsets for each MPI process
   count = MPI_CHUNK_SIZE * mpi_rank;  
   while(true) {
@@ -92,33 +95,8 @@ int main (int argc, char **argv)
 	last_perf = count;
 	printf("Found %llu!\n", last_perf);
 
-	// Need to allocate more memory to hold new perfect number
-	if ((num_even + num_odd) % REALLOC_SIZE == 0) {
-	  /*
-	   * Initialize data buffer 
-	   */
-
-	  // TODO: note that variable length data arrays can't be used with *p*HDF5
-	  perfs_tmp = (big_int *) realloc(perfs, 
-	    (num_even + num_odd + REALLOC_SIZE) * sizeof *perfs
-	  );
-	  if (!perfs_tmp) {
-	    /* Could not reallocate, checkpoint and exit */
-	    fprintf(stderr, "Couldn't allocate more space for perf data!\n");
-	    fflush(stdout);
-	    free(perfs);
-	    MPI_Finalize();
-	    exit(-1);
-
-	  } else {
-            /* Initialize data */
-	    perfs = perfs_tmp;
-	    for (ii = num_even + num_odd; ii < num_even + num_odd + REALLOC_SIZE; ii++) {
-		perfs[ii] = 0;
-	    }
-	  }
-	} // end of [if ((num_even + num_odd) % REALLOC_SIZE == 0)]
-
+	// May need to allocate more memory to hold new perfect number
+        check_and_realloc(num_even, num_odd);
 	if (last_perf % 2 == 0) {
 	  num_even++;
 	} else {
@@ -147,6 +125,35 @@ int main (int argc, char **argv)
   return 0;
 }
 
+
+void check_and_realloc(big_int num_even, big_int num_odd) {
+  int ii;
+  if ((num_even + num_odd) % REALLOC_SIZE == 0) {
+    /*
+     * Initialize data buffer 
+     */
+
+    // TODO: note that variable length data arrays can't be used with *p*HDF5
+    perfs_tmp = (big_int *) realloc(perfs, 
+      (num_even + num_odd + REALLOC_SIZE) * sizeof *perfs
+    );
+    if (!perfs_tmp) {
+      /* Could not reallocate, checkpoint and exit */
+      fprintf(stderr, "Couldn't allocate more space for perf data!\n");
+      fflush(stdout);
+      free(perfs);
+      MPI_Finalize();
+      exit(-1);
+    } else {
+      /* Initialize data */
+      perfs = perfs_tmp;
+      for (ii = num_even + num_odd; ii < num_even + num_odd + REALLOC_SIZE; ii++) {
+	  perfs[ii] = 0;
+      }
+    }
+  } // end of [if ((num_even + num_odd) % REALLOC_SIZE == 0)]
+  return;
+}
 
 
 herr_t checkpoint(MPI_Comm comm, MPI_Info info,                 
