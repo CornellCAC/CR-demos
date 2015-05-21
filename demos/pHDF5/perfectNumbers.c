@@ -20,9 +20,9 @@
 #define RANK            1   
 
 #define REALLOC_SIZE 2
-//#define MPI_CHUNK_SIZE 10000000
+#define MPI_CHUNK_SIZE 10000000
 //For DEBUG:
-#define MPI_CHUNK_SIZE 10
+//#define MPI_CHUNK_SIZE 10
 
 #define HDF_FAIL -1
 
@@ -37,18 +37,17 @@ int mpi_size, mpi_rank;
 MPI_Comm comm  = MPI_COMM_WORLD;
 MPI_Info info  = MPI_INFO_NULL;
 MPI_Status status;
-MPI_Request last_perf_request = MPI_REQUEST_NULL;
 MPI_Request num_even_request  = MPI_REQUEST_NULL;
 MPI_Request num_odd_request   = MPI_REQUEST_NULL;
 MPI_Request perfs_request     = MPI_REQUEST_NULL;
-
 
 /*
  * State variables
  */ 
 big_int     *perfs = NULL;   /* pointer to data buffer to write */
 big_int     *perfs_tmp = NULL;
-big_int     count, count_start, last_perf, num_odd, num_even;
+big_int     count, count_start, num_odd, num_even;
+big_int     new_odds, new_evens;
 
 /* Function declarations */
 
@@ -60,7 +59,7 @@ void check_and_realloc(big_int num_even, big_int num_odd);
 
 herr_t checkpoint(MPI_Comm comm, MPI_Info info,
                   big_int* perfs, big_int num_even, big_int num_odd, 
-                  big_int last_perf, big_int last_n);
+                  big_int last_n);
 
 int broadcast_state();
 
@@ -77,7 +76,6 @@ int main (int argc, char **argv)
   MPI_Comm_size(comm, &mpi_size);
   MPI_Comm_rank(comm, &mpi_rank);  
 
-  last_perf = 0;
   num_even = 0;
   num_odd = 0;
   check_and_realloc(num_even, num_odd);
@@ -87,32 +85,30 @@ int main (int argc, char **argv)
     printf("Count is %lld on rank %d!\n", count, mpi_rank);
     count_start = count;
     while(count < count_start + MPI_CHUNK_SIZE) {
+      new_evens = 0;
+      new_odds = 0;
       if (count_start == 0) {
-        printf("Minor count is %llu!\n", count);
+        printf("Minor count is %lld!\n", count);
       }
       if (perfect_diff(count) == 0) {
         //wait_for_state();
-	last_perf = count;
-	printf("Found %llu!\n", last_perf);
-
+	printf("Found %lld!\n", count);
 	// May need to allocate more memory to hold new perfect number
         check_and_realloc(num_even, num_odd);
-	if (last_perf % 2 == 0) {
-	  num_even++;
+	if (count % 2 == 0) {
+	  new_evens++;
 	} else {
-	  num_odd++;
+	  new_odds++;
 	}
-	perfs[num_even + num_odd - 1] = last_perf;
       } // end [if (perfect_diff(count) == 0)]
-      // Initiate synchronization
-      broadcast_state();
       count++;
 
     } // end [while(count < count + MPI_CHUNK_SIZE)]
-    MPI_Barrier(comm);    
-    //wait_for_state();
-    checkpoint(comm, info, perfs, num_even, num_odd, 
-               last_perf, count);
+    // Initiate synchronization
+    broadcast_state();
+    num_even += new_evens;
+    num_odd += new_odds;
+    checkpoint(comm, info, perfs, num_even, num_odd, count);
     
     // offset into next iteration
     count += (mpi_size - 1) * MPI_CHUNK_SIZE; 
@@ -158,7 +154,7 @@ void check_and_realloc(big_int num_even, big_int num_odd) {
 
 herr_t checkpoint(MPI_Comm comm, MPI_Info info,                 
                 big_int* perfs, big_int num_even, big_int num_odd, 
-                big_int last_perf, big_int last_n) {
+                big_int last_n) {
 
   /*
    * HDF5 APIs definitions
@@ -168,13 +164,11 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   hid_t	      file_access_plist_id;
   /* object identifiers */
   hid_t       file_id, dset_id, status_id;
-  hid_t       last_perf_id;
   hid_t       last_n_id;
   hid_t       num_even_id;
   hid_t       num_odd_id;
   /* file and memory dataspace identifiers */
   hid_t       filespace;
-  hid_t       last_perf_dataspace_id;
   hid_t       last_n_dataspace_id;
   hid_t       num_even_dataspace_id;
   hid_t       num_odd_dataspace_id;
@@ -227,13 +221,6 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
 
     //
     // Add metadata as attributes 
-    //
-    last_perf_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
-    last_perf_id = H5Acreate(status_id, "Last Perfect Number", big_int_h5, 
-			     last_perf_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Awrite(last_perf_id, big_int_h5, &last_perf);
-    status = H5Aclose(last_perf_id);
-    status = H5Sclose(last_perf_dataspace_id);
     //
     last_n_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
     last_n_id = H5Acreate(status_id, "Last Number Tested ", big_int_h5, 
@@ -328,43 +315,8 @@ void backup_file() {
 /*
  * Broadcasts state updates
  */
-/* int broadcast_state2() { */
-/*   MPI_Ibcast((void *) &last_perf, 1, big_int_mpi, mpi_rank, comm, &last_perf_request); */
-/*   MPI_Ibcast((void *) &num_even , 1, big_int_mpi, mpi_rank, comm, &num_even_request); */
-/*   MPI_Ibcast((void *) &num_odd  , 1, big_int_mpi, mpi_rank, comm, &num_odd_request); */
-/*   MPI_Ibcast((void *) perfs + (num_even + num_odd - 1) * sizeof perfs */
-/*                                 , 1, big_int_mpi, mpi_rank, comm, &perfs_request); */
-/*   return 0;  */
-/* } */
-
-/*
- * Broadcasts state updates
- */
 int broadcast_state() {
-  MPI_Allreduce(MPI_IN_PLACE, (void *) &last_perf, 1, big_int_mpi, MPI_MAX, comm);
-  MPI_Allreduce(MPI_IN_PLACE, (void *) &num_even,  1, big_int_mpi, MPI_MAX, comm);
-  MPI_Allreduce(MPI_IN_PLACE, (void *) &num_odd,   1, big_int_mpi, MPI_MAX, comm);
-  MPI_Allreduce(MPI_IN_PLACE, (void *) perfs + (num_even + num_odd - 1) * sizeof perfs, 
-                                                   1, big_int_mpi, MPI_MAX, comm);
-
-  /* MPI_Bcast((void *) &last_perf, 1, big_int_mpi, mpi_rank, comm); */
-  /* MPI_Bcast((void *) &num_even , 1, big_int_mpi, mpi_rank, comm); */
-  /* MPI_Bcast((void *) &num_odd  , 1, big_int_mpi, mpi_rank, comm); */
-  /* //FIXME: (and Ibcast above) */
-  /* MPI_Bcast((void *) perfs + (num_even + num_odd - 1) * sizeof perfs */
-  /*                               , 1, big_int_mpi, mpi_rank, comm); */
+  MPI_Allreduce(MPI_IN_PLACE, (void *) &new_evens,  1, big_int_mpi, MPI_SUM, comm);
+  MPI_Allreduce(MPI_IN_PLACE, (void *) &new_odds,   1, big_int_mpi, MPI_SUM, comm);
   return 0; 
-}
-
-
-/*
- * Waits for state updates
- */
-int wait_for_state() {
-  MPI_Wait(&last_perf_request, &status);
-  MPI_Wait(&num_even_request,  &status);
-  MPI_Wait(&num_odd_request,   &status);
-  MPI_Wait(&perfs_request,     &status);
-
-  return 0;
 }
