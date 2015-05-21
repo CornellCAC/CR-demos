@@ -29,9 +29,9 @@
 #define big_int_mpi MPI_LONG_LONG
 typedef long long big_int;
 
-/*
- * MPI variables
- */
+//
+// MPI variables
+//
 int mpi_size, mpi_rank;
 MPI_Comm comm  = MPI_COMM_WORLD;
 MPI_Info info  = MPI_INFO_NULL;
@@ -40,14 +40,16 @@ MPI_Request num_even_request  = MPI_REQUEST_NULL;
 MPI_Request num_odd_request   = MPI_REQUEST_NULL;
 MPI_Request perf_diffs_request     = MPI_REQUEST_NULL;
 
-/*
- * State variables
- */ 
+//
+// State variables
+// 
 big_int     *perf_diffs = NULL;   /* pointer to data buffer to write */
 big_int     count, chunk_count;
 big_int     num_odd, num_even;
 big_int     new_odds, new_evens;
-/* Function declarations */
+
+//
+// Function declarations 
 
 big_int perfect_diff(big_int n);
 
@@ -84,10 +86,7 @@ int main (int argc, char **argv)
     chunk_count++;
     current_size = chunk_count * MPI_CHUNK_SIZE;
     perf_diffs = alloc_and_init(perf_diffs, current_size);  
-    //perf_diffs = realloc(perf_diffs, current_size * sizeof *perf_diffs);
-    perf_diffs[0] = 0;
-    new_evens = 0;
-    new_odds  = 0;
+    new_evens = new_odds = 0;
     do {
       index = MPI_CHUNK_SIZE * (chunk_count-1) + count % MPI_CHUNK_SIZE;
       perf_diffs[index] = perfect_diff(count);
@@ -99,6 +98,7 @@ int main (int argc, char **argv)
 	  new_odds++;
 	}
       } // end [if (perfect_diff(count) == 0)]
+      perf_diffs[index] = count; //FIXME, DBG
       count++;
     } while ((count % MPI_CHUNK_SIZE) != 0);
     // Synchronize metadata state and then save state
@@ -168,12 +168,11 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   hid_t       num_even_dataspace_id;
   hid_t       num_odd_dataspace_id;
   /* dataset and memoryset dimensions (just 1d here) */
-  hsize_t     dimsf[] = {chunk_count * MPI_CHUNK_SIZE * mpi_size}; 
   hsize_t     dimsm[] = {chunk_count * MPI_CHUNK_SIZE}; 
-  /* hyperslab offsets and sizes */
+  hsize_t     dimsf[] = {dimsm[0] * mpi_size}; 
+  /* hyperslab offset and size info */
   hsize_t     start[]   = {mpi_rank * MPI_CHUNK_SIZE};
-  hsize_t     count[]   = {chunk_count}; 
-  hsize_t     blocksz[] = {MPI_CHUNK_SIZE}; 
+  hsize_t     count[]   = {chunk_count * MPI_CHUNK_SIZE}; 
 
   /* scalar attribute dimension (just 1 here) */
   hsize_t     attr_dimsf[] = {1}; 
@@ -248,7 +247,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   // Select this process's hyperslab
   //
   H5Sselect_hyperslab(filespace, H5S_SELECT_SET, 
-                      start, NULL, count, blocksz);
+                      start, NULL, count, NULL);
 
   //
   // Set up (collective) dataset-write property list
