@@ -178,9 +178,12 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   hsize_t     attr_dimsf[] = {1}; 
   herr_t      status;
 
-  if( access( H5FILE_NAME, F_OK ) != -1 ) {
-    // File exists already, backup first 
-    backup_file();
+  // Only need to backup once per checkpoint
+  if (mpi_rank == 0) {
+    if( access( H5FILE_NAME, F_OK ) != -1 ) {
+      // File exists already, backup first 
+      backup_file();
+    }
   }
 
   // 
@@ -190,80 +193,73 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   H5Pset_fapl_mpio(file_access_plist_id, comm, info);
   file_id = H5Fcreate(H5FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, file_access_plist_id);
   H5Pclose(file_access_plist_id);
-//  if (mpi_rank == 0) {
 
-    //
-    // Create a new file collectively and release property list identifier.
-    //
+  //
+  // Create a new file collectively and release property list identifier.
+  //
 
 
-    //
-    // Create the dataspace for the dataset.
-    //
-    filespace = H5Screate_simple(RANK, dimsf, NULL); 
-    printf("Dims of rank %d: %d\n", mpi_rank, dimsf[0]);
+  //
+  // Create the dataspace for the dataset.
+  //
+  filespace = H5Screate_simple(RANK, dimsf, NULL); 
+  printf("Dims of rank %d: %d\n", mpi_rank, dimsf[0]);
 
-    //
-    // Create the dataset with default properties and close filespace.
-    //
+  //
+  // Create the dataset with default properties and close filespace.
+  //
 
-    printf("Before dset_id on rank %d!\n", mpi_rank);
-    dset_id = H5Dcreate(file_id, DATASETNAME, big_int_h5, filespace,
+  printf("Before dset_id on rank %d!\n", mpi_rank);
+  dset_id = H5Dcreate(file_id, DATASETNAME, big_int_h5, filespace,
+		      H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  printf("After dset_id on rank %d!\n", mpi_rank);
+  assert(dset_id != HDF_FAIL);
+
+  //
+  // Create status group
+  //
+  status_id = H5Gcreate(file_id, STATUSGROUP,
 			H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    printf("After dset_id on rank %d!\n", mpi_rank);
-    assert(dset_id != HDF_FAIL);
 
-    //
-    // Create status group
-    //
-    status_id = H5Gcreate(file_id, STATUSGROUP,
-			  H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-    //
-    // Add metadata as attributes 
-    //
-    last_n_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
-    last_n_id = H5Acreate(status_id, "Last Number Tested ", big_int_h5, 
-			  last_n_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Awrite(last_n_id, big_int_h5, &last_n);
-    status = H5Aclose(last_n_id);
-    status = H5Sclose(last_n_dataspace_id);
-    //
-    num_even_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
-    num_even_id = H5Acreate(status_id, "Number of even perfect numbers found", 
-			    big_int_h5, num_even_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Awrite(num_even_id, big_int_h5, &num_even);
-    status = H5Aclose(num_even_id);
-    status = H5Sclose(num_even_dataspace_id);
-    //
-    num_odd_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
-    num_odd_id = H5Acreate(status_id, "Number of odd perfect numbers found", big_int_h5, 
-			   num_odd_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
-    status = H5Awrite(num_odd_id, big_int_h5, &num_odd);
-    status = H5Aclose(num_odd_id);
-    status = H5Sclose(num_odd_dataspace_id);
+  //
+  // Add metadata as attributes 
+  //
+  last_n_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
+  last_n_id = H5Acreate(status_id, "Last Number Tested ", big_int_h5, 
+			last_n_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+  status = H5Awrite(last_n_id, big_int_h5, &last_n);
+  status = H5Aclose(last_n_id);
+  status = H5Sclose(last_n_dataspace_id);
+  //
+  num_even_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
+  num_even_id = H5Acreate(status_id, "Number of even perfect numbers found", 
+			  big_int_h5, num_even_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+  status = H5Awrite(num_even_id, big_int_h5, &num_even);
+  status = H5Aclose(num_even_id);
+  status = H5Sclose(num_even_dataspace_id);
+  //
+  num_odd_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
+  num_odd_id = H5Acreate(status_id, "Number of odd perfect numbers found", big_int_h5, 
+			 num_odd_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+  status = H5Awrite(num_odd_id, big_int_h5, &num_odd);
+  status = H5Aclose(num_odd_id);
+  status = H5Sclose(num_odd_dataspace_id);
 
 
+  
+  plist_id = H5Pcreate(H5P_DATASET_XFER);
+  H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
 
-    //plist_id = H5Pcreate(H5P_DATASET_XFER);
-    //H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
+  status = H5Dwrite(dset_id, big_int_h5, H5S_ALL, H5S_ALL,
+  		    plist_id, (const void *) perfs);  //plist_id or H5P_DEFAULT 
 
-    //status = H5Dwrite(dset_id, big_int_h5, H5S_ALL, H5S_ALL,
-    //		    plist_id, (const void *) perfs);  //plist_id or H5P_DEFAULT 
-
-    //
-    // Close/release resources.
-    //
-    H5Dclose(dset_id);
-    printf("After dset_id CLOSE on rank %d!\n", mpi_rank);
-    H5Gclose(status_id);
-    H5Sclose(filespace);
-    printf("After filespace CLOSE on rank %d!\n", mpi_rank);
-//} 
+  //
+  // Close/release resources.
+  //
+  H5Dclose(dset_id);
+  H5Gclose(status_id);
+  H5Sclose(filespace);
   H5Fclose(file_id);
-  printf("After file_id CLOSE on rank %d!\n", mpi_rank);
-
-  printf("After plist_id CLOSE on rank %d!\n", mpi_rank);
 
   //TODO: move these to non parallel block above
   /*
