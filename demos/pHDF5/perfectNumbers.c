@@ -7,6 +7,7 @@
  
 #include "hdf5.h"
 
+#include <assert.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
@@ -22,6 +23,8 @@
 //#define MPI_CHUNK_SIZE 10000000
 //For DEBUG:
 #define MPI_CHUNK_SIZE 10
+
+#define HDF_FAIL -1
 
 #define big_int_h5 H5T_NATIVE_LLONG
 #define big_int_mpi MPI_LONG_LONG
@@ -78,7 +81,7 @@ int main (int argc, char **argv)
   // Initialize data offsets for each MPI process
   count = MPI_CHUNK_SIZE * mpi_rank;  
   while(true) {
-    printf("Count is %llu!\n", count);
+    printf("Count is %lld on rank %d!\n", count, mpi_rank);
     count_start = count;
     while(count < count_start + MPI_CHUNK_SIZE) {
       if (count_start == 0) {
@@ -126,14 +129,15 @@ int main (int argc, char **argv)
         broadcast_state();
       } // end [if (perfect_diff(count) == 0)]
       count++;
+
     } // end [while(count < count + MPI_CHUNK_SIZE)]
-    
+    MPI_Barrier(comm);    
     //wait_for_state();
     checkpoint(comm, info, perfs, num_even, num_odd, 
                last_perf, count);
     
     // offset into next iteration
-    count += (mpi_size - 1) * MPI_CHUNK_SIZE + 1; 
+    count += (mpi_size - 1) * MPI_CHUNK_SIZE; 
   } // end [while(true)]
 
   free(perfs);
@@ -154,7 +158,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
    */ 	
 
   /* property list identifier */
-  hid_t	      plist_id;
+  hid_t	      file_access_plist_id;
   /* object identifiers */
   hid_t       file_id, dset_id, status_id;
   hid_t       last_perf_id;
@@ -173,48 +177,50 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   hsize_t     attr_dimsf[] = {1}; 
   herr_t      status;
 
+  if( access( H5FILE_NAME, F_OK ) != -1 ) {
+    // File exists already, backup first 
+    backup_file();
+  }
 
-  // Only need to write these once
-  if (mpi_rank == (mpi_size - 1)) {
+  // 
+  // Set up file access property list with parallel I/O access
+  //
+  file_access_plist_id = H5Pcreate(H5P_FILE_ACCESS);	
+  H5Pset_fapl_mpio(file_access_plist_id, comm, info);
+  file_id = H5Fcreate(H5FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, file_access_plist_id);
+  H5Pclose(file_access_plist_id);
+//  if (mpi_rank == 0) {
 
-    if( access( H5FILE_NAME, F_OK ) != -1 ) {
-      /* File exists already, backup first */
-      backup_file();
-    }
-
-    /* 
-     * Set up file access property list with parallel I/O access
-     */
-    plist_id = H5Pcreate(H5P_FILE_ACCESS);	
-    H5Pset_fapl_mpio(plist_id, comm, info);
-
-    /*
-     * Create a new file collectively and release property list identifier.
-     */
-    file_id = H5Fcreate(H5FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
-    H5Pclose(plist_id);
+    //
+    // Create a new file collectively and release property list identifier.
+    //
 
 
-    /*
-     * Create the dataspace for the dataset.
-     */
+    //
+    // Create the dataspace for the dataset.
+    //
     filespace = H5Screate_simple(RANK, dimsf, NULL); 
+    printf("Dims of rank %d: %d\n", mpi_rank, dimsf[0]);
 
-    /*
-     * Create the dataset with default properties and close filespace.
-     */
+    //
+    // Create the dataset with default properties and close filespace.
+    //
+
+    printf("Before dset_id on rank %d!\n", mpi_rank);
     dset_id = H5Dcreate(file_id, DATASETNAME, big_int_h5, filespace,
 			H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-    /*
-     * Create status group
-     */
+    printf("After dset_id on rank %d!\n", mpi_rank);
+    assert(dset_id != HDF_FAIL);
+/*
+    //
+    // Create status group
+    //
     status_id = H5Gcreate(file_id, STATUSGROUP,
 			  H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
-    /*
-     * Add metadata as attributes 
-     */
+    //
+    // Add metadata as attributes 
+    //
     last_perf_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
     last_perf_id = H5Acreate(status_id, "Last Perfect Number", big_int_h5, 
 			     last_perf_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
@@ -242,26 +248,28 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
     status = H5Awrite(num_odd_id, big_int_h5, &num_odd);
     status = H5Aclose(num_odd_id);
     status = H5Sclose(num_odd_dataspace_id);
+*/
+
 
     //plist_id = H5Pcreate(H5P_DATASET_XFER);
-    //H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_INDEPENDENT);
+    //H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
 
-    status = H5Dwrite(dset_id, big_int_h5, H5S_ALL, H5S_ALL,
-                      H5P_DEFAULT, (const void *) perfs);
-    //H5Pclose(plist_id);
+    //status = H5Dwrite(dset_id, big_int_h5, H5S_ALL, H5S_ALL,
+    //		    plist_id, (const void *) perfs);  //plist_id or H5P_DEFAULT 
 
-    /*
-     * Close/release resources.
-     */
+    //
+    // Close/release resources.
+    //
     H5Dclose(dset_id);
-    H5Gclose(status_id);
+    printf("After dset_id CLOSE on rank %d!\n", mpi_rank);
+    //H5Gclose(status_id);
     H5Sclose(filespace);
-    //H5Pclose(plist_id);
-    H5Fclose(file_id);
+    printf("After filespace CLOSE on rank %d!\n", mpi_rank);
+//} 
+  H5Fclose(file_id);
+  printf("After file_id CLOSE on rank %d!\n", mpi_rank);
 
-
-  }
-
+  printf("After plist_id CLOSE on rank %d!\n", mpi_rank);
 
   //TODO: move these to non parallel block above
   /*
