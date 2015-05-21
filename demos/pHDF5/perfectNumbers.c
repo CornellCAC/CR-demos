@@ -125,9 +125,9 @@ int main (int argc, char **argv)
 	  num_odd++;
 	}
 	perfs[num_even + num_odd - 1] = last_perf;
-        // Initiate synchronization
-        broadcast_state();
       } // end [if (perfect_diff(count) == 0)]
+      // Initiate synchronization
+      broadcast_state();
       count++;
 
     } // end [while(count < count + MPI_CHUNK_SIZE)]
@@ -334,12 +334,18 @@ void backup_file() {
  * Broadcasts state updates
  */
 int broadcast_state() {
-  MPI_Bcast((void *) &last_perf, 1, big_int_mpi, mpi_rank, comm);
-  MPI_Bcast((void *) &num_even , 1, big_int_mpi, mpi_rank, comm);
-  MPI_Bcast((void *) &num_odd  , 1, big_int_mpi, mpi_rank, comm);
-  //FIXME: (and Ibcast above)
-  MPI_Bcast((void *) perfs + (num_even + num_odd - 1) * sizeof perfs
-                                , 1, big_int_mpi, mpi_rank, comm);
+  MPI_Allreduce(MPI_IN_PLACE, (void *) &last_perf, 1, big_int_mpi, MPI_MAX, comm);
+  MPI_Allreduce(MPI_IN_PLACE, (void *) &num_even,  1, big_int_mpi, MPI_MAX, comm);
+  MPI_Allreduce(MPI_IN_PLACE, (void *) &num_odd,   1, big_int_mpi, MPI_MAX, comm);
+  MPI_Allreduce(MPI_IN_PLACE, (void *) perfs + (num_even + num_odd - 1) * sizeof perfs, 
+                                                   1, big_int_mpi, MPI_MAX, comm);
+
+  /* MPI_Bcast((void *) &last_perf, 1, big_int_mpi, mpi_rank, comm); */
+  /* MPI_Bcast((void *) &num_even , 1, big_int_mpi, mpi_rank, comm); */
+  /* MPI_Bcast((void *) &num_odd  , 1, big_int_mpi, mpi_rank, comm); */
+  /* //FIXME: (and Ibcast above) */
+  /* MPI_Bcast((void *) perfs + (num_even + num_odd - 1) * sizeof perfs */
+  /*                               , 1, big_int_mpi, mpi_rank, comm); */
   return 0; 
 }
 
