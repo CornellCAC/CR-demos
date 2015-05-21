@@ -20,7 +20,7 @@
 #define RANK            1   
 
 #define REALLOC_SIZE 2
-#define MPI_CHUNK_SIZE 10000000
+#define MPI_CHUNK_SIZE 1000
 //For DEBUG:
 //#define MPI_CHUNK_SIZE 10
 
@@ -84,9 +84,9 @@ int main (int argc, char **argv)
   while(true) {
     printf("Count is %lld on rank %d!\n", count, mpi_rank);
     count_start = count;
+    new_evens = 0;
+    new_odds = 0;
     while(count < count_start + MPI_CHUNK_SIZE) {
-      new_evens = 0;
-      new_odds = 0;
       if (count_start == 0) {
         printf("Minor count is %lld!\n", count);
       }
@@ -212,7 +212,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
 			H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     printf("After dset_id on rank %d!\n", mpi_rank);
     assert(dset_id != HDF_FAIL);
-/*
+
     //
     // Create status group
     //
@@ -242,7 +242,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
     status = H5Awrite(num_odd_id, big_int_h5, &num_odd);
     status = H5Aclose(num_odd_id);
     status = H5Sclose(num_odd_dataspace_id);
-*/
+
 
 
     //plist_id = H5Pcreate(H5P_DATASET_XFER);
@@ -256,7 +256,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
     //
     H5Dclose(dset_id);
     printf("After dset_id CLOSE on rank %d!\n", mpi_rank);
-    //H5Gclose(status_id);
+    H5Gclose(status_id);
     H5Sclose(filespace);
     printf("After filespace CLOSE on rank %d!\n", mpi_rank);
 //} 
