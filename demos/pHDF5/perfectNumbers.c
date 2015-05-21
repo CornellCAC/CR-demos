@@ -18,12 +18,14 @@
 #define STATUSGROUP 	"status"
 #define RANK            1   
 
-#define REALLOC_SIZE 100
-#define MPI_CHUNK_SIZE 10000000
+#define REALLOC_SIZE 2
+//#define MPI_CHUNK_SIZE 10000000
+//For DEBUG:
+#define MPI_CHUNK_SIZE 10
 
-#define big_int_h5 H5T_NATIVE_ULLONG
-#define big_int_mpi MPI_UNSIGNED_LONG_LONG
-typedef unsigned long long big_int;
+#define big_int_h5 H5T_NATIVE_LLONG
+#define big_int_mpi MPI_LONG_LONG
+typedef long long big_int;
 
 /*
  * MPI variables
@@ -43,7 +45,7 @@ MPI_Request perfs_request     = MPI_REQUEST_NULL;
  */ 
 big_int     *perfs = NULL;   /* pointer to data buffer to write */
 big_int     *perfs_tmp = NULL;
-big_int     count, last_perf, num_odd, num_even;
+big_int     count, count_start, last_perf, num_odd, num_even;
 
 /* Function declarations */
 
@@ -74,16 +76,16 @@ int main (int argc, char **argv)
   num_even = 0;
   num_odd = 0;
   // Initialize data offsets for each MPI process
-  for(ii = 0; ii < mpi_size, ii++;) {
-    if (mpi_rank == ii) {
-      count = MPI_CHUNK_SIZE * mpi_rank;  
-    }
-  }
+  count = MPI_CHUNK_SIZE * mpi_rank;  
   while(true) {
     printf("Count is %llu!\n", count);
-    while(count < count + MPI_CHUNK_SIZE) {
-      if (perfect_diff(count)) {
-        wait_for_state();
+    count_start = count;
+    while(count < count_start + MPI_CHUNK_SIZE) {
+      if (count_start == 0) {
+        printf("Minor count is %llu!\n", count);
+      }
+      if (perfect_diff(count) == 0) {
+        //wait_for_state();
 	last_perf = count;
 	printf("Found %llu!\n", last_perf);
 
@@ -122,13 +124,13 @@ int main (int argc, char **argv)
 	perfs[num_even + num_odd - 1] = last_perf;
         // Initiate synchronization
         broadcast_state();
-      } // end [if (perfect_diff(count))]
+      } // end [if (perfect_diff(count) == 0)]
       count++;
     } // end [while(count < count + MPI_CHUNK_SIZE)]
     
-    wait_for_state();
+    //wait_for_state();
     checkpoint(comm, info, perfs, num_even, num_odd, 
-	       last_perf, count);
+               last_perf, count);
     
     // offset into next iteration
     count += (mpi_size - 1) * MPI_CHUNK_SIZE + 1; 
@@ -172,43 +174,44 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   herr_t      status;
 
 
-  if( access( H5FILE_NAME, F_OK ) != -1 ) {
-    /* File exists already, backup first */
-    backup_file();
-  }
-
-  /* 
-   * Set up file access property list with parallel I/O access
-   */
-  plist_id = H5Pcreate(H5P_FILE_ACCESS);	
-	     H5Pset_fapl_mpio(plist_id, comm, info);
-
-  /*
-   * Create a new file collectively and release property list identifier.
-   */
-  file_id = H5Fcreate(H5FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
-	    H5Pclose(plist_id);
-
-
-  /*
-   * Create the dataspace for the dataset.
-   */
-  filespace = H5Screate_simple(RANK, dimsf, NULL); 
-
-  /*
-   * Create the dataset with default properties and close filespace.
-   */
-  dset_id = H5Dcreate(file_id, DATASETNAME, big_int_h5, filespace,
-		      H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-  /*
-   * Create status group
-   */
-  status_id = H5Gcreate(file_id, STATUSGROUP,
-	                H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
   // Only need to write these once
   if (mpi_rank == (mpi_size - 1)) {
+
+    if( access( H5FILE_NAME, F_OK ) != -1 ) {
+      /* File exists already, backup first */
+      backup_file();
+    }
+
+    /* 
+     * Set up file access property list with parallel I/O access
+     */
+    plist_id = H5Pcreate(H5P_FILE_ACCESS);	
+    H5Pset_fapl_mpio(plist_id, comm, info);
+
+    /*
+     * Create a new file collectively and release property list identifier.
+     */
+    file_id = H5Fcreate(H5FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
+    H5Pclose(plist_id);
+
+
+    /*
+     * Create the dataspace for the dataset.
+     */
+    filespace = H5Screate_simple(RANK, dimsf, NULL); 
+
+    /*
+     * Create the dataset with default properties and close filespace.
+     */
+    dset_id = H5Dcreate(file_id, DATASETNAME, big_int_h5, filespace,
+			H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+    /*
+     * Create status group
+     */
+    status_id = H5Gcreate(file_id, STATUSGROUP,
+			  H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
     /*
      * Add metadata as attributes 
      */
@@ -239,25 +242,38 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
     status = H5Awrite(num_odd_id, big_int_h5, &num_odd);
     status = H5Aclose(num_odd_id);
     status = H5Sclose(num_odd_dataspace_id);
+
+    //plist_id = H5Pcreate(H5P_DATASET_XFER);
+    //H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_INDEPENDENT);
+
+    status = H5Dwrite(dset_id, big_int_h5, H5S_ALL, H5S_ALL,
+                      H5P_DEFAULT, (const void *) perfs);
+    //H5Pclose(plist_id);
+
+    /*
+     * Close/release resources.
+     */
+    H5Dclose(dset_id);
+    H5Gclose(status_id);
+    H5Sclose(filespace);
+    //H5Pclose(plist_id);
+    H5Fclose(file_id);
+
+
   }
 
+
+  //TODO: move these to non parallel block above
   /*
    * Create property list for collective dataset write.
    */
-  plist_id = H5Pcreate(H5P_DATASET_XFER);
-	     H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
 
-  status = H5Dwrite(dset_id, big_int_h5, H5S_ALL, H5S_ALL,
-		    plist_id, (const void *) perfs);
+  //plist_id = H5Pcreate(H5P_DATASET_XFER);
+  //H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_INDEPENDENT /*H5FD_MPIO_COLLECTIVE*/);
 
-  /*
-   * Close/release resources.
-   */
-  H5Dclose(dset_id);
-  H5Gclose(status_id);
-  H5Sclose(filespace);
-  H5Pclose(plist_id);
-  H5Fclose(file_id);
+  //status = H5Dwrite(dset_id, big_int_h5, H5S_ALL, H5S_ALL,
+  //    plist_id, (const void *) perfs);
+
 
   return status;
 
@@ -274,17 +290,14 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
 // Also see : http://rosettacode.org/wiki/Perfect_numbers
 //          : http://en.wikipedia.org/wiki/List_of_perfect_numbers
 big_int perfect_diff(big_int n) {
-  big_int divisor_sum = 1;
+  big_int divisor_sum = 0;
   big_int i;
-  for (i = 2; i < n; i++) {
+  for (i = 1; i < n; i++) {
     if (n % i == 0) {
       divisor_sum += i;
     }
   }
-  if (divisor_sum == n) {
-    return true;
-  }
-  return false;
+  return divisor_sum - n;
 }
 
 
@@ -300,12 +313,25 @@ void backup_file() {
 /*
  * Broadcasts state updates
  */
-int broadcast_state() {
+int broadcast_state2() {
   MPI_Ibcast((void *) &last_perf, 1, big_int_mpi, mpi_rank, comm, &last_perf_request);
   MPI_Ibcast((void *) &num_even , 1, big_int_mpi, mpi_rank, comm, &num_even_request);
   MPI_Ibcast((void *) &num_odd  , 1, big_int_mpi, mpi_rank, comm, &num_odd_request);
   MPI_Ibcast((void *) perfs + (num_even + num_odd - 1) * sizeof perfs
                                 , 1, big_int_mpi, mpi_rank, comm, &perfs_request);
+  return 0; 
+}
+
+/*
+ * Broadcasts state updates
+ */
+int broadcast_state() {
+  MPI_Bcast((void *) &last_perf, 1, big_int_mpi, mpi_rank, comm);
+  MPI_Bcast((void *) &num_even , 1, big_int_mpi, mpi_rank, comm);
+  MPI_Bcast((void *) &num_odd  , 1, big_int_mpi, mpi_rank, comm);
+  //FIXME: (and Ibcast above)
+  MPI_Bcast((void *) perfs + (num_even + num_odd - 1) * sizeof perfs
+                                , 1, big_int_mpi, mpi_rank, comm);
   return 0; 
 }
 
