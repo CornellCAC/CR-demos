@@ -19,10 +19,12 @@
 #define STATUSGROUP 	"status"
 #define RANK            1   
 
-#define REALLOC_SIZE 2
 #define MPI_CHUNK_SIZE 1000
 //For DEBUG:
 //#define MPI_CHUNK_SIZE 10
+
+//#define REALLOC_SIZE 2
+#define REALLOC_SIZE MPI_CHUNK_SIZE
 
 #define HDF_FAIL -1
 
@@ -39,14 +41,14 @@ MPI_Info info  = MPI_INFO_NULL;
 MPI_Status status;
 MPI_Request num_even_request  = MPI_REQUEST_NULL;
 MPI_Request num_odd_request   = MPI_REQUEST_NULL;
-MPI_Request perfs_request     = MPI_REQUEST_NULL;
+MPI_Request perf_diffs_request     = MPI_REQUEST_NULL;
 
 /*
  * State variables
  */ 
-big_int     *perfs = NULL;   /* pointer to data buffer to write */
-big_int     *perfs_tmp = NULL;
-big_int     count, count_start, num_odd, num_even;
+big_int     *perf_diffs = NULL;   /* pointer to data buffer to write */
+big_int     *perf_diffs_tmp = NULL;
+big_int     count, count_in_chunk, num_odd, num_even;
 big_int     new_odds, new_evens;
 
 /* Function declarations */
@@ -55,10 +57,10 @@ big_int perfect_diff(big_int n);
 
 void backup_file();
 
-void check_and_realloc(big_int num_even, big_int num_odd);
+void alloc_and_init();
 
 herr_t checkpoint(MPI_Comm comm, MPI_Info info,
-                  big_int* perfs, big_int num_even, big_int num_odd, 
+                  big_int* perf_diffs, big_int num_even, big_int num_odd, 
                   big_int last_n);
 
 int broadcast_state();
@@ -78,23 +80,17 @@ int main (int argc, char **argv)
 
   num_even = 0;
   num_odd = 0;
-  check_and_realloc(num_even, num_odd);
   // Initialize data offsets for each MPI process
   count = MPI_CHUNK_SIZE * mpi_rank;  
   while(true) {
-    printf("Count is %lld on rank %d!\n", count, mpi_rank);
-    count_start = count;
+    count_in_chunk = 0;
     new_evens = 0;
-    new_odds = 0;
-    while(count < count_start + MPI_CHUNK_SIZE) {
-      if (count_start == 0) {
-        printf("Minor count is %lld!\n", count);
-      }
-      if (perfect_diff(count) == 0) {
-        //wait_for_state();
+    new_odds  = 0;
+    alloc_and_init();
+    while(count < MPI_CHUNK_SIZE) {
+      perf_diffs[count_in_chunk] = perfect_diff(count);
+      if (perf_diffs[count_in_chunk] == 0) {
 	printf("Found %lld!\n", count);
-	// May need to allocate more memory to hold new perfect number
-        check_and_realloc(num_even, num_odd);
 	if (count % 2 == 0) {
 	  new_evens++;
 	} else {
@@ -102,19 +98,18 @@ int main (int argc, char **argv)
 	}
       } // end [if (perfect_diff(count) == 0)]
       count++;
-
-    } // end [while(count < count + MPI_CHUNK_SIZE)]
-    // Initiate synchronization
+      count_in_chunk++;
+    } // end [while(count < MPI_CHUNK_SIZE)]
+    // Synchronize metadata state and then save state
     broadcast_state();
     num_even += new_evens;
-    num_odd += new_odds;
-    checkpoint(comm, info, perfs, num_even, num_odd, count);
-    
+    num_odd  += new_odds;
+    checkpoint(comm, info, perf_diffs, num_even, num_odd, count);    
     // offset into next iteration
-    count += (mpi_size - 1) * MPI_CHUNK_SIZE; 
+    count += (mpi_size - 1) * MPI_CHUNK_SIZE;
   } // end [while(true)]
 
-  free(perfs);
+  free(perf_diffs);
 
   MPI_Finalize();
 
@@ -122,38 +117,37 @@ int main (int argc, char **argv)
 }
 
 
-void check_and_realloc(big_int num_even, big_int num_odd) {
-  int ii;
-  if ((num_even + num_odd) % REALLOC_SIZE == 0) {
-    /*
-     * Initialize data buffer 
-     */
 
-    // TODO: note that variable length data arrays can't be used with *p*HDF5
-    perfs_tmp = (big_int *) realloc(perfs, 
-      (num_even + num_odd + REALLOC_SIZE) * sizeof *perfs
-    );
-    if (!perfs_tmp) {
-      /* Could not reallocate, checkpoint and exit */
-      fprintf(stderr, "Couldn't allocate more space for perf data!\n");
-      fflush(stdout);
-      free(perfs);
-      MPI_Finalize();
-      exit(-1);
-    } else {
-      /* Initialize data */
-      perfs = perfs_tmp;
-      for (ii = num_even + num_odd; ii < num_even + num_odd + REALLOC_SIZE; ii++) {
-	  perfs[ii] = 0;
-      }
+//
+// We don't really need such a complicated function,
+// but this form can be useful if you have a dataset
+// that may need to grow in memory.
+//
+void alloc_and_init() {
+  int ii;
+  perf_diffs_tmp = (big_int *) realloc(perf_diffs, 
+    REALLOC_SIZE * sizeof *perf_diffs
+  );
+  if (!perf_diffs_tmp) {
+    /* Could not reallocate, checkpoint and exit */
+    fprintf(stderr, "Couldn't allocate more space for perf data!\n");
+    fflush(stdout);
+    free(perf_diffs);
+    MPI_Finalize();
+    exit(-1);
+  } else {
+    /* Initialize data */
+    perf_diffs = perf_diffs_tmp;
+    for (ii = 0; ii < REALLOC_SIZE; ii++) {
+	perf_diffs[ii] = 0;
     }
-  } // end of [if ((num_even + num_odd) % REALLOC_SIZE == 0)]
+  }
   return;
 }
 
 
 herr_t checkpoint(MPI_Comm comm, MPI_Info info,                 
-                big_int* perfs, big_int num_even, big_int num_odd, 
+                big_int* perf_diffs, big_int num_even, big_int num_odd, 
                 big_int last_n) {
 
   /*
@@ -162,6 +156,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
 
   /* property list identifier */
   hid_t	      file_access_plist_id;
+  hid_t       dset_plist_id;
   /* object identifiers */
   hid_t       file_id, dset_id, status_id;
   hid_t       last_n_id;
@@ -169,11 +164,16 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   hid_t       num_odd_id;
   /* file and memory dataspace identifiers */
   hid_t       filespace;
+  hid_t       memspace;
   hid_t       last_n_dataspace_id;
   hid_t       num_even_dataspace_id;
   hid_t       num_odd_dataspace_id;
   /* dataset dimension (just 1 here) */
-  hsize_t     dimsf[] = {num_even + num_odd}; 
+  hsize_t     dimsf[] = {MPI_CHUNK_SIZE * mpi_size}; 
+  hsize_t     dimsm[] = {MPI_CHUNK_SIZE}; 
+  /* hyperslab dimension and size */
+  hsize_t     count[]  = {MPI_CHUNK_SIZE}; 
+  hssize_t    offset[] = {MPI_CHUNK_SIZE * mpi_rank}; 
   /* scalar attribute dimension (just 1 here) */
   hsize_t     attr_dimsf[] = {1}; 
   herr_t      status;
@@ -188,6 +188,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
 
   // 
   // Set up file access property list with parallel I/O access
+  // Also create a new file collectively then release property list identifier
   //
   file_access_plist_id = H5Pcreate(H5P_FILE_ACCESS);	
   H5Pset_fapl_mpio(file_access_plist_id, comm, info);
@@ -195,25 +196,15 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   H5Pclose(file_access_plist_id);
 
   //
-  // Create a new file collectively and release property list identifier.
-  //
-
-
-  //
   // Create the dataspace for the dataset.
   //
   filespace = H5Screate_simple(RANK, dimsf, NULL); 
-  printf("Dims of rank %d: %d\n", mpi_rank, dimsf[0]);
 
   //
-  // Create the dataset with default properties and close filespace.
+  // Create the memspace for the dataset: think of this
+  // as the window each process has into the total dataset.
   //
-
-  printf("Before dset_id on rank %d!\n", mpi_rank);
-  dset_id = H5Dcreate(file_id, DATASETNAME, big_int_h5, filespace,
-		      H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  printf("After dset_id on rank %d!\n", mpi_rank);
-  assert(dset_id != HDF_FAIL);
+  memspace = H5Screate_simple(RANK, dimsm, NULL); 
 
   //
   // Create status group
@@ -245,36 +236,43 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   status = H5Aclose(num_odd_id);
   status = H5Sclose(num_odd_dataspace_id);
 
+  //
+  // Create the dataset with default properties.
+  //
+  dset_id = H5Dcreate(file_id, DATASETNAME, big_int_h5, filespace,
+		      H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  assert(dset_id != HDF_FAIL);
 
-  
-  plist_id = H5Pcreate(H5P_DATASET_XFER);
-  H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
+  //
+  // Select this process's hyperslab
+  //
+  H5Sselect_hyperslab(filespace, H5S_SELECT_SET, 
+                      offset, NULL, count, NULL);
 
-  status = H5Dwrite(dset_id, big_int_h5, H5S_ALL, H5S_ALL,
-  		    plist_id, (const void *) perfs);  //plist_id or H5P_DEFAULT 
+  //
+  // Set up (collective) dataset-write property list
+  //
+  dset_plist_id = H5Pcreate(H5P_DATASET_XFER);
+  H5Pset_dxpl_mpio(dset_plist_id, H5FD_MPIO_COLLECTIVE);
+
+
+  //
+  // Collectively write dataset to disk
+  //
+  status = H5Dwrite(dset_id, big_int_h5, memspace, filespace,
+  		    dset_plist_id, (const void *) perf_diffs);
 
   //
   // Close/release resources.
   //
   H5Dclose(dset_id);
+  H5Pclose(dset_plist_id);
   H5Gclose(status_id);
+  H5Sclose(memspace);
   H5Sclose(filespace);
   H5Fclose(file_id);
 
-  //TODO: move these to non parallel block above
-  /*
-   * Create property list for collective dataset write.
-   */
-
-  //plist_id = H5Pcreate(H5P_DATASET_XFER);
-  //H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_INDEPENDENT /*H5FD_MPIO_COLLECTIVE*/);
-
-  //status = H5Dwrite(dset_id, big_int_h5, H5S_ALL, H5S_ALL,
-  //    plist_id, (const void *) perfs);
-
-
   return status;
-
 }
 
 
@@ -297,7 +295,6 @@ big_int perfect_diff(big_int n) {
   }
   return divisor_sum - n;
 }
-
 
 
 /*
