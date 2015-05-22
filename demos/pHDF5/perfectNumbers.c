@@ -98,7 +98,7 @@ int main (int argc, char **argv)
 	  new_odds++;
 	}
       } // end [if (perfect_diff(count) == 0)]
-      perf_diffs[index] = count; //FIXME, DBG
+      //perf_diffs[index] = count; //For DEBUG of output
       count++;
     } while ((count % MPI_CHUNK_SIZE) != 0);
     // Synchronize metadata state and then save state
@@ -172,8 +172,10 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   hsize_t     dimsf[] = {dimsm[0] * mpi_size}; 
   /* hyperslab offset and size info */
   hsize_t     start[]   = {mpi_rank * MPI_CHUNK_SIZE};
-  hsize_t     count[]   = {chunk_count * MPI_CHUNK_SIZE}; 
-
+  hsize_t     count[]   = {chunk_count};
+  hsize_t     block[]   = {MPI_CHUNK_SIZE};
+  hsize_t     stride[]  = {MPI_CHUNK_SIZE * mpi_size};
+ 
   /* scalar attribute dimension (just 1 here) */
   hsize_t     attr_dimsf[] = {1}; 
   herr_t      status;
@@ -247,7 +249,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   // Select this process's hyperslab
   //
   H5Sselect_hyperslab(filespace, H5S_SELECT_SET, 
-                      start, NULL, count, NULL);
+                      start, stride, count, block);
 
   //
   // Set up (collective) dataset-write property list
