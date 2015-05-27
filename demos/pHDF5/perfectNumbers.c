@@ -59,8 +59,9 @@ void backup_file();
 
 big_int* alloc_and_init(big_int *data, big_int realloc_size);
 
-herr_t checkpoint(MPI_Comm comm, MPI_Info info,
-                  big_int* perf_diffs, big_int num_even, big_int num_odd);
+herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs);
+
+herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs);
 
 int broadcast_state();
 
@@ -86,9 +87,9 @@ int main (int argc, char **argv)
   // Initialize data offsets for each MPI process
   count = MPI_CHUNK_SIZE * mpi_rank;
 
-  // Restore if file exists:
+  // Restore if prior h5 file exists:
   if( access( H5FILE_NAME, F_OK ) != -1 ) {
-    //restore(...);
+    restore(comm, info, perf_diffs);
   }
   while(true) {
     chunk_count++;
@@ -102,7 +103,7 @@ int main (int argc, char **argv)
     broadcast_state();
     num_even += new_evens;
     num_odd  += new_odds;
-    checkpoint(comm, info, perf_diffs, num_even, num_odd);    
+    checkpoint(comm, info, perf_diffs);    
     // offset into next iteration
     count += (mpi_size - 1) * MPI_CHUNK_SIZE;
   } // end [while(true)]
@@ -144,14 +145,14 @@ big_int* alloc_and_init(big_int *data, big_int realloc_size) {
   big_int *data_tmp = NULL;
   data_tmp = (big_int *) realloc(data, realloc_size * sizeof *data);
   if (!data_tmp) {
-    /* Could not reallocate, checkpoint and exit */
+    // Could not reallocate, checkpoint and exit
     fprintf(stderr, "Couldn't allocate more space for data!\n");
     fflush(stdout);
     free(data);
     MPI_Finalize();
     exit(-1);
   } else {
-    /* Initialize data */
+    // Initialize data 
     data = data_tmp;
     for (ii = realloc_size - MPI_CHUNK_SIZE; ii < realloc_size; ii++) {
 	data[ii] = 0;
@@ -161,35 +162,34 @@ big_int* alloc_and_init(big_int *data, big_int realloc_size) {
 }
 
 
-herr_t checkpoint(MPI_Comm comm, MPI_Info info,                 
-                big_int* perf_diffs, big_int num_even, big_int num_odd) {
+herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
 
-  /*
-   * HDF5 APIs definitions
-   */ 	
+  //
+  // HDF5 APIs definitions
+  //  	
 
-  /* property list identifier */
+  // property list identifier
   hid_t	      file_access_plist_id;
   hid_t       dset_plist_id;
-  /* object identifiers */
+  // object identifiers 
   hid_t       file_id, dset_id, status_id;
   hid_t       num_even_id;
   hid_t       num_odd_id;
-  /* file and memory dataspace identifiers */
+  // file and memory dataspace identifiers 
   hid_t       filespace;
   hid_t       memspace;
   hid_t       num_even_dataspace_id;
   hid_t       num_odd_dataspace_id;
-  /* dataset and memoryset dimensions (just 1d here) */
+  // dataset and memoryset dimensions (just 1d here) 
   hsize_t     dimsm[] = {chunk_count * MPI_CHUNK_SIZE}; 
   hsize_t     dimsf[] = {dimsm[0] * mpi_size}; 
-  /* hyperslab offset and size info */
+  // hyperslab offset and size info */
   hsize_t     start[]   = {mpi_rank * MPI_CHUNK_SIZE};
   hsize_t     count[]   = {chunk_count};
   hsize_t     block[]   = {MPI_CHUNK_SIZE};
   hsize_t     stride[]  = {MPI_CHUNK_SIZE * mpi_size};
  
-  /* scalar attribute dimension (just 1 here) */
+  // scalar attribute dimension (just 1 here) 
   hsize_t     attr_dimsf[] = {1}; 
   herr_t      status;
 
@@ -234,6 +234,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   num_even_id = H5Acreate(status_id, "Number of even perfect numbers found", 
 			  big_int_h5, num_even_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
   status = H5Awrite(num_even_id, big_int_h5, &num_even);
+  assert(status != HDF_FAIL);
   status = H5Aclose(num_even_id);
   status = H5Sclose(num_even_dataspace_id);
   //
@@ -241,6 +242,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   num_odd_id = H5Acreate(status_id, "Number of odd perfect numbers found", big_int_h5, 
 			 num_odd_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
   status = H5Awrite(num_odd_id, big_int_h5, &num_odd);
+  assert(status != HDF_FAIL);
   status = H5Aclose(num_odd_id);
   status = H5Sclose(num_odd_dataspace_id);
 
@@ -269,6 +271,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   //
   status = H5Dwrite(dset_id, big_int_h5, memspace, filespace,
   		    dset_plist_id, (const void *) perf_diffs);
+  assert(status != HDF_FAIL);
 
   //
   // Close/release resources.
@@ -283,10 +286,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info,
   return status;
 }
 
-
-
-herr_t restore(MPI_Comm comm, MPI_Info info,                 
-                big_int* perf_diffs, big_int num_even, big_int num_odd) {
+herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
 
   //
   // HDF5 APIs definitions
@@ -302,8 +302,6 @@ herr_t restore(MPI_Comm comm, MPI_Info info,
   // file and memory dataspace identifiers 
   hid_t       filespace;
   hid_t       memspace;
-  hid_t       num_even_dataspace_id;
-  hid_t       num_odd_dataspace_id;
   // dataset and memoryset dimensions (just 1d here) 
   hsize_t     dimsm[1]; 
   hsize_t     dimsf[1]; 
@@ -311,8 +309,7 @@ herr_t restore(MPI_Comm comm, MPI_Info info,
   hsize_t     start[]   = {mpi_rank * MPI_CHUNK_SIZE};
   hsize_t     count[]   = {chunk_count};
   hsize_t     block[]   = {MPI_CHUNK_SIZE};
-  hsize_t     stride[]  = {MPI_CHUNK_SIZE * mpi_size};
- 
+  hsize_t     stride[]  = {MPI_CHUNK_SIZE * mpi_size}; 
   // scalar attribute dimension (just 1 here)
   hsize_t     attr_dimsf[] = {1}; 
   herr_t      status;
@@ -347,27 +344,22 @@ herr_t restore(MPI_Comm comm, MPI_Info info,
   perf_diffs = alloc_and_init(perf_diffs, dimsm[0]);
 
   //
-  // Create status group
+  // Open status group
   //
-  status_id = H5Gcreate(file_id, STATUSGROUP,
-			H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  status_id = H5Gopen(file_id, STATUSGROUP, H5P_DEFAULT);
 
   //
-  // Add metadata as attributes 
+  // Read metadata attributes 
   //
-  num_even_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
-  num_even_id = H5Acreate(status_id, "Number of even perfect numbers found", 
-			  big_int_h5, num_even_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+  num_even_id = H5Aopen(status_id, "Number of even perfect numbers found", H5P_DEFAULT);
   status = H5Aread(num_even_id, big_int_h5, &num_even);
+  assert(status != HDF_FAIL);
   status = H5Aclose(num_even_id);
-  status = H5Sclose(num_even_dataspace_id);
   //
-  num_odd_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
-  num_odd_id = H5Acreate(status_id, "Number of odd perfect numbers found", big_int_h5, 
-			 num_odd_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+  num_odd_id = H5Aopen(status_id, "Number of odd perfect numbers found", H5P_DEFAULT); 
   status = H5Aread(num_odd_id, big_int_h5, &num_odd);
+  assert(status != HDF_FAIL);
   status = H5Aclose(num_odd_id);
-  status = H5Sclose(num_odd_dataspace_id);
 
   //
   // Select this process's hyperslab
@@ -383,10 +375,11 @@ herr_t restore(MPI_Comm comm, MPI_Info info,
 
 
   //
-  // Collectively write dataset to disk
+  // Collectively read dataset from disk
   //
   status = H5Dread(dset_id, big_int_h5, memspace, filespace,
   		    dset_plist_id, (void *) perf_diffs);
+  assert(status != HDF_FAIL);
 
   //
   // Close/release resources.
@@ -454,5 +447,4 @@ big_int get_restore_chunk_count(hsize_t datasize) {
     return total_chunks / mpi_size;
   }
 }
-
 
