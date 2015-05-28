@@ -170,7 +170,8 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
 
   // property list identifier
   hid_t	      file_access_plist_id;
-  hid_t       dset_plist_id;
+  hid_t       dset_plist_mpio_id;
+  hid_t       dset_plist_create_id;
   // object identifiers 
   hid_t       file_id, dset_id, status_id;
   hid_t       num_even_id;
@@ -181,8 +182,10 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   hid_t       num_even_dataspace_id;
   hid_t       num_odd_dataspace_id;
   // dataset and memoryset dimensions (just 1d here) 
-  hsize_t     dimsm[] = {chunk_counter * MPI_CHUNK_SIZE}; 
-  hsize_t     dimsf[] = {dimsm[0] * mpi_size}; 
+  hsize_t     dimsm[]     = {chunk_counter * MPI_CHUNK_SIZE}; 
+  hsize_t     dimsf[]     = {dimsm[0] * mpi_size};
+  hsize_t     maxdims[]   = {H5S_UNLIMITED};
+  hsize_t     chunkdims[] = {1};
   // hyperslab offset and size info */
   hsize_t     start[]   = {mpi_rank * MPI_CHUNK_SIZE};
   hsize_t     count[]   = {chunk_counter};
@@ -208,12 +211,11 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   file_access_plist_id = H5Pcreate(H5P_FILE_ACCESS);	
   H5Pset_fapl_mpio(file_access_plist_id, comm, info);
   file_id = H5Fcreate(H5FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, file_access_plist_id);
-  H5Pclose(file_access_plist_id);
 
   //
   // Create the dataspace for the dataset.
   //
-  filespace = H5Screate_simple(RANK, dimsf, NULL); 
+  filespace = H5Screate_simple(RANK, dimsf, maxdims); 
 
   //
   // Create the memspace for the dataset: think of this
@@ -247,10 +249,13 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   status = H5Sclose(num_odd_dataspace_id);
 
   //
-  // Create the dataset with default properties.
+  // Create the dataset with chunk properties (primiarly to 
+  // allow variable-sized datasets upon restore).
   //
-  dset_id = H5Dcreate(file_id, DATASETNAME, big_int_h5, filespace,
-		      H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  dset_plist_create_id = H5Pcreate (H5P_DATASET_CREATE);
+  status = H5Pset_chunk (dset_plist_create_id, RANK, chunkdims);
+  dset_id = H5Dcreate (file_id, DATASETNAME, big_int_h5, filespace,
+		       H5P_DEFAULT, dset_plist_create_id, H5P_DEFAULT);
   assert(dset_id != HDF_FAIL);
 
   //
@@ -262,22 +267,23 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   //
   // Set up (collective) dataset-write property list
   //
-  dset_plist_id = H5Pcreate(H5P_DATASET_XFER);
-  H5Pset_dxpl_mpio(dset_plist_id, H5FD_MPIO_COLLECTIVE);
+  dset_plist_mpio_id = H5Pcreate(H5P_DATASET_XFER);
+  H5Pset_dxpl_mpio(dset_plist_mpio_id, H5FD_MPIO_COLLECTIVE);
 
 
   //
   // Collectively write dataset to disk
   //
   status = H5Dwrite(dset_id, big_int_h5, memspace, filespace,
-  		    dset_plist_id, (const void *) perf_diffs);
+  		    dset_plist_mpio_id, (const void *) perf_diffs);
   assert(status != HDF_FAIL);
 
   //
   // Close/release resources.
   //
   H5Dclose(dset_id);
-  H5Pclose(dset_plist_id);
+  H5Pclose(dset_plist_create_id);
+  H5Pclose(dset_plist_mpio_id);
   H5Gclose(status_id);
   H5Sclose(memspace);
   H5Sclose(filespace);
@@ -294,7 +300,7 @@ herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
 
   // property list identifier 
   hid_t	      file_access_plist_id;
-  hid_t       dset_plist_id;
+  hid_t       dset_plist_mpio_id;
   // object identifiers 
   hid_t       file_id, dset_id, status_id;
   hid_t       num_even_id;
@@ -317,10 +323,11 @@ herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   // 
   // Set up file access property list with parallel I/O access
   // Also create a new file collectively then release property list identifier
-  //
+  // Note we use H5F_ACC_RDWR so we can change the dataset (extent) size
+  // 
   file_access_plist_id = H5Pcreate(H5P_FILE_ACCESS);	
   H5Pset_fapl_mpio(file_access_plist_id, comm, info);
-  file_id = H5Fopen(H5FILE_NAME, H5F_ACC_RDONLY, file_access_plist_id);
+  file_id = H5Fopen(H5FILE_NAME, H5F_ACC_RDWR, file_access_plist_id);
   H5Pclose(file_access_plist_id);
 
   //
@@ -336,11 +343,18 @@ herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   H5Sget_simple_extent_dims(filespace, dimsf, NULL);
 
   //
-  // Create the memspace for the dataset and allocate data for it 
+  // Update dimensions and dataspaces as appropriate
   //
   chunk_counter = get_restore_chunk_counter(dimsf[0]);
   count[0] = chunk_counter;
   dimsm[0] = chunk_counter * MPI_CHUNK_SIZE;
+  dimsf[0] = dimsm[0] * mpi_size;
+  status = H5Dset_extent(dset_id, dimsf);
+  assert(status != HDF_FAIL);
+
+  //
+  // Create the memspace for the dataset and allocate data for it 
+  //
   memspace = H5Screate_simple(RANK, dimsm, NULL); 
   perf_diffs = alloc_and_init(perf_diffs, dimsm[0]);
 
@@ -369,20 +383,18 @@ herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   // Select this process's hyperslab
   //
   H5Sselect_hyperslab(filespace, H5S_SELECT_SET, start, stride, count, block);
-  //H5Sselect_hyperslab(filespace, H5S_SELECT_SET, start, NULL, count, NULL);
 
   //
   // Set up (collective) dataset-read property list
   //
-  dset_plist_id = H5Pcreate(H5P_DATASET_XFER);
-  H5Pset_dxpl_mpio(dset_plist_id, H5FD_MPIO_COLLECTIVE);
-
+  dset_plist_mpio_id = H5Pcreate(H5P_DATASET_XFER);
+  H5Pset_dxpl_mpio(dset_plist_mpio_id, H5FD_MPIO_COLLECTIVE);
 
   //
   // Collectively read dataset from disk
   //
   status = H5Dread(dset_id, big_int_h5, memspace, filespace,
-  		   dset_plist_id, (void *) perf_diffs);
+  		   dset_plist_mpio_id, (void *) perf_diffs);
   assert(status != HDF_FAIL);
 
   //FIXME: update count for each process
@@ -391,7 +403,7 @@ herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   // Close/release resources.
   //
   H5Dclose(dset_id);
-  H5Pclose(dset_plist_id);
+  H5Pclose(dset_plist_mpio_id);
   H5Gclose(status_id);
   H5Sclose(memspace);
   H5Sclose(filespace);
