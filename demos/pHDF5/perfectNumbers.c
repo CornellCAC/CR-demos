@@ -44,7 +44,7 @@ MPI_Request perf_diffs_request     = MPI_REQUEST_NULL;
 // State variables
 // 
 big_int     *perf_diffs = NULL;   /* pointer to data buffer to write */
-big_int     count, chunk_count;
+big_int     counter, chunk_counter;
 big_int     num_odd, num_even;
 big_int     new_odds, new_evens;
 
@@ -65,7 +65,7 @@ herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs);
 
 int broadcast_state();
 
-big_int get_restore_chunk_count(hsize_t datasize);
+big_int get_restore_chunk_counter(hsize_t datasize);
 
 int wait_for_state();
 
@@ -83,29 +83,29 @@ int main (int argc, char **argv)
 
   num_even = 0;
   num_odd = 0;
-  chunk_count = 0;
+  chunk_counter = 0;
   // Initialize data offsets for each MPI process
-  count = MPI_CHUNK_SIZE * mpi_rank;
+  counter = MPI_CHUNK_SIZE * mpi_rank;
 
   // Restore if prior h5 file exists:
   if( access( H5FILE_NAME, F_OK ) != -1 ) {
     restore(comm, info, perf_diffs);
   }
   while(true) {
-    chunk_count++;
-    current_size = chunk_count * MPI_CHUNK_SIZE;
+    chunk_counter++;
+    current_size = chunk_counter * MPI_CHUNK_SIZE;
     perf_diffs = alloc_and_init(perf_diffs, current_size);  
     new_evens = new_odds = 0;
     do {
       perf_update_loopbody(index);
-    } while ((count % MPI_CHUNK_SIZE) != 0);
+    } while ((counter % MPI_CHUNK_SIZE) != 0);
     // Synchronize metadata state and then save state
     broadcast_state();
     num_even += new_evens;
     num_odd  += new_odds;
     checkpoint(comm, info, perf_diffs);    
     // offset into next iteration
-    count += (mpi_size - 1) * MPI_CHUNK_SIZE;
+    counter += (mpi_size - 1) * MPI_CHUNK_SIZE;
   } // end [while(true)]
 
   free(perf_diffs);
@@ -122,18 +122,18 @@ int main (int argc, char **argv)
 // checks for perfect numbers and updates process-local state
 //
 void perf_update_loopbody(int index) {
-  index = MPI_CHUNK_SIZE * (chunk_count-1) + count % MPI_CHUNK_SIZE;
-  perf_diffs[index] = perfect_diff(count);
+  index = MPI_CHUNK_SIZE * (chunk_counter-1) + counter % MPI_CHUNK_SIZE;
+  perf_diffs[index] = perfect_diff(counter);
   if (perf_diffs[index] == 0) {
-    printf("Found %lld!\n", count);
-    if (count % 2 == 0) {
+    printf("Found %lld!\n", counter);
+    if (counter % 2 == 0) {
       new_evens++;
     } else {
       new_odds++;
     }
   } // end [if (perfect_diff(count) == 0)]
   //perf_diffs[index] = count; //For DEBUG of output
-  count++;
+  counter++;
 }
 
 //
@@ -181,11 +181,11 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   hid_t       num_even_dataspace_id;
   hid_t       num_odd_dataspace_id;
   // dataset and memoryset dimensions (just 1d here) 
-  hsize_t     dimsm[] = {chunk_count * MPI_CHUNK_SIZE}; 
+  hsize_t     dimsm[] = {chunk_counter * MPI_CHUNK_SIZE}; 
   hsize_t     dimsf[] = {dimsm[0] * mpi_size}; 
   // hyperslab offset and size info */
   hsize_t     start[]   = {mpi_rank * MPI_CHUNK_SIZE};
-  hsize_t     count[]   = {chunk_count};
+  hsize_t     count[]   = {chunk_counter};
   hsize_t     block[]   = {MPI_CHUNK_SIZE};
   hsize_t     stride[]  = {MPI_CHUNK_SIZE * mpi_size};
  
@@ -307,7 +307,7 @@ herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   hsize_t     dimsf[1]; 
   // hyperslab offset and size info 
   hsize_t     start[]   = {mpi_rank * MPI_CHUNK_SIZE};
-  hsize_t     count[]   = {chunk_count};
+  hsize_t     count[1];
   hsize_t     block[]   = {MPI_CHUNK_SIZE};
   hsize_t     stride[]  = {MPI_CHUNK_SIZE * mpi_size}; 
   // scalar attribute dimension (just 1 here)
@@ -338,10 +338,14 @@ herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   //
   // Create the memspace for the dataset and allocate data for it 
   //
-  chunk_count = get_restore_chunk_count(dimsf[0]);
-  dimsm[0] = chunk_count * MPI_CHUNK_SIZE;
+  chunk_counter = get_restore_chunk_counter(dimsf[0]);
+  count[0] = chunk_counter;
+  dimsm[0] = chunk_counter * MPI_CHUNK_SIZE;
   memspace = H5Screate_simple(RANK, dimsm, NULL); 
   perf_diffs = alloc_and_init(perf_diffs, dimsm[0]);
+
+  //DEBUG
+  printf("m, f, count,: %d, %d, %d\n", dimsm[0], dimsf[0], count[0]);
 
   //
   // Open status group
@@ -364,8 +368,8 @@ herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   //
   // Select this process's hyperslab
   //
-  H5Sselect_hyperslab(filespace, H5S_SELECT_SET, 
-                      start, stride, count, block);
+  H5Sselect_hyperslab(filespace, H5S_SELECT_SET, start, stride, count, block);
+  //H5Sselect_hyperslab(filespace, H5S_SELECT_SET, start, NULL, count, NULL);
 
   //
   // Set up (collective) dataset-read property list
@@ -378,8 +382,10 @@ herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   // Collectively read dataset from disk
   //
   status = H5Dread(dset_id, big_int_h5, memspace, filespace,
-  		    dset_plist_id, (void *) perf_diffs);
+  		   dset_plist_id, (void *) perf_diffs);
   assert(status != HDF_FAIL);
+
+  //FIXME: update count for each process
 
   //
   // Close/release resources.
@@ -436,7 +442,7 @@ int broadcast_state() {
 // Calculates the number of chunks to allocate
 // upon a restore
 //
-big_int get_restore_chunk_count(hsize_t datasize) {
+big_int get_restore_chunk_counter(hsize_t datasize) {
   big_int total_chunks = datasize / MPI_CHUNK_SIZE;
   if ((datasize % MPI_CHUNK_SIZE) != 0) {
     total_chunks++;
