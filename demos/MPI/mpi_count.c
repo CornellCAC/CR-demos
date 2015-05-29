@@ -8,7 +8,7 @@
 int main(int argc, char **argv) 
 {
   char message[20], hostname[HOSTNAME_LEN];
-  int  j, rank, size, tag = 99;
+  int  jj, rank, size, tag = 99;
   MPI_Status status;
   int errno = 0;
 
@@ -19,8 +19,8 @@ int main(int argc, char **argv)
   if (rank == 0)
     {
       strcpy(message, "Hello, world");
-      for (j = 1; j < size; j++) 
-	MPI_Send(message, 13, MPI_CHAR, j, tag, MPI_COMM_WORLD);
+      for (jj = 1; jj < size; jj++) 
+	MPI_Send(message, 13, MPI_CHAR, jj, tag, MPI_COMM_WORLD);
     }
   else {
     MPI_Recv(message, 20, MPI_CHAR, 0, tag, MPI_COMM_WORLD, &status);
@@ -34,10 +34,10 @@ int main(int argc, char **argv)
   MPI_Barrier(MPI_COMM_WORLD);
 
   //Proceed to slow counting ...
-  unsigned long i = 0;
+  unsigned long ii = 0;
   while (1) {
-    printf("%d:%lu ", rank, i);
-    i = i + 1;
+    printf("%d:%lu ", rank, ii);
+    ii= ii + 1;
     sleep(2);
     fflush(stdout);
   } 

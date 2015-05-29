@@ -32,6 +32,7 @@
 # Named executables
 count
 mpi_count
+count_aware
 random_chars
 perfectNumbers
 

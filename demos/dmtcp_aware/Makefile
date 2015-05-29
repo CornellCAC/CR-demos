@@ -1,6 +1,6 @@
 ifndef CC
-	CC=gcc
+	CC=icc
 endif
 
-random_chars: random_chars.c
-	${CC} ${CFLAGS} -I${DMTCP_ROOT}/include -o random_chars random_chars.c
+count_aware: count_aware.c
+	${CC} ${CFLAGS} -I${DMTCP_ROOT}/include -o count_aware count_aware.c
