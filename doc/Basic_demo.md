@@ -1,7 +1,7 @@
 Let's try the C demo first, compiling it with your favorite compiler:
 
 ```
-user@ubuntu:~/CR-demos$ gcc count.c -o count
+$ gcc count.c -o count
 ```
 
 With the demo compiled, we can now run it with DMTCP. Also, you can
@@ -12,9 +12,9 @@ for this example. Press `Ctr-C` sometime after the first 5 seconds of
 running with DMTCP to kill the application.
 
 ```
-user@ubuntu:~/CR-demos$ dmtcp_launch -i 5 ./count
+$ dmtcp_launch -i 5 ./count
 dmtcp_coordinator starting...
-    Host: ubuntu (127.0.0.1)
+    Host: login4.stampede.tacc.utexas.edu (129.114.64.14)
     Port: 7779
     Checkpoint Interval: 5
     Exit on last client: 1
@@ -22,25 +22,46 @@ Backgrounding...
 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 ^C
 ```
 
+The first thing you might notice is that a port is being used by 
+the program `dmtcp_coordinator`; once more people use DMTCP on a
+given node, you may find conflicts with the port. You can try again
+with a different port by using the argument `-p <port number>`, and
+try a random port with `-p 0`.
+
 Note that you need to specify an absolute or relative path explicitly, i.e.,
 ./count not count, or you will get an error:
 
 ```
-user@ubuntu:~/CR-demos$ dmtcp_launch -i 5 count
+$ dmtcp_launch -i 5 count
 *** ERROR:  Executable to run w/ DMTCP appears not to be readable,
 ***         or no such executable in path.
 ```
 
 ```
-user@ubuntu:~/CR-demos$ ls
+$ ls
 ckpt_count_1a7dd72006bd7-40000-54714d2a.dmtcp  count  count.c  count.pl  
 dmtcp_restart_script_1a7dd72006bd7-40000-54714d29.sh  dmtcp_restart_script.sh  README.md
 ```
 
+Let's restart it:
+
 ```
-user@ubuntu:~/CR-demos$ dmtcp_restart ckpt_count_1a7dd72006bd7-40000-54714d2a.dmtcp 
+$ ./dmtcp_restart_script.sh
 dmtcp_coordinator starting...
-    Host: ubuntu (127.0.0.1)
+    Host: login4.stampede.tacc.utexas.edu (129.114.64.14)
+    Port: 7779
+    Checkpoint Interval: 5
+    Exit on last client: 1
+Backgrounding...
+17 18 19 ^C
+```
+
+The automatically generated `dmtcp_restart_script.sh` is a convenient wrapper for restarting from the last checkpoint in the current directory. You can also manually perform a restart:
+
+```
+$ dmtcp_restart ckpt_count_1a7dd72006bd7-40000-54714d2a.dmtcp 
+dmtcp_coordinator starting...
+    Host: login4.stampede.tacc.utexas.edu (129.114.64.14)
     Port: 7779
     Checkpoint Interval: disabled (checkpoint manually instead)
     Exit on last client: 1
@@ -54,9 +75,9 @@ otherwise further intervals checkpointing is disabled (note the warning above).
 We can run the Perl demo very similarly to the C demo:
 
 ```
-user@ubuntu:~/CR-demos$ dmtcp_launch -i 5 perl count.pl 
+$ dmtcp_launch -i 5 perl count.pl 
 dmtcp_coordinator starting...
-    Host: ubuntu (127.0.0.1)
+    Host: login4.stampede.tacc.utexas.edu (129.114.64.14)
     Port: 7779
     Checkpoint Interval: 5
     Exit on last client: 1
@@ -69,9 +90,9 @@ script directly will not work:
 
 
 ```
-user@ubuntu:~/CR-demos$ dmtcp_launch -i 5 ./count.pl 
+$ dmtcp_launch -i 5 ./count.pl 
 dmtcp_coordinator starting...
-    Host: ubuntu (127.0.0.1)
+    Host: login4.stampede.tacc.utexas.edu (129.114.64.14)
     Port: 7779
     Checkpoint Interval: 5
     Exit on last client: 1
@@ -85,16 +106,14 @@ Backgrounding...
 Checking for checkpoint files, we now see a Perl process file:
 
 ```
-user@ubuntu:~/CR-demos$ ls *.dmtcp
+$ ls *.dmtcp
 ckpt_count_1a7dd72006bd7-40000-54714d2a.dmtcp  ckpt_perl_1a7dd72006bd7-40000-54714f4f.dmtcp
 ```
 
-Let's restart it:
-
 ```
-user@ubuntu:~/CR-demos$ dmtcp_restart ckpt_perl_1a7dd72006bd7-40000-54714f4f.dmtcp 
+$ dmtcp_restart ckpt_perl_1a7dd72006bd7-40000-54714f4f.dmtcp 
 dmtcp_coordinator starting...
-    Host: ubuntu (127.0.0.1)
+    Host: login4.stampede.tacc.utexas.edu (129.114.64.14)
     Port: 7779
     Checkpoint Interval: disabled (checkpoint manually instead)
     Exit on last client: 1
@@ -106,7 +125,7 @@ It will be interesting to compare the file sizes of the two checkpoint files, si
 one is using an interpreter, and the other is a small program.
 
 ```
-user@ubuntu:~/CR-demos$ du -h *.dmtcp
+$ du -h *.dmtcp
 2.9M    ckpt_count_1a7dd72006bd7-40000-54714d2a.dmtcp
 4.0M    ckpt_perl_1a7dd72006bd7-40000-54714f4f.dmtcp
 ```
@@ -119,7 +138,7 @@ As can be seen, there is some overhead in the Perl program, but perhaps not as m
 
 DNS must be working properly for restart script:
 ```
-user@ubuntu:~/CR-demos$ ./dmtcp_restart_script_1a7dd72006bd7-40000-54714f4e.sh 
+$ ./dmtcp_restart_script_1a7dd72006bd7-40000-54714f4e.sh 
 [13268] WARNING at jsocket.cpp:121 in JSockAddr; REASON='JWARNING(e == 0) failed'
      e = -5
      gai_strerror(e) = No address associated with hostname
