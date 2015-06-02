@@ -36,11 +36,11 @@ int main(int argc, char* argv[])
     if(dmtcp_is_enabled()){
       printf("\n");
       rr = dmtcp_checkpoint();
-      if(rr <= 0)
-	printf("Error, checkpointing failed: %d\n",rr);
-      if(rr == 1)
+      if(rr == DMTCP_NOT_PRESENT)
+	printf("***** Error, DMTCP not running; checkpoint skipped ***** \n");
+      if(rr == DMTCP_AFTER_CHECKPOINT)
 	printf("***** after checkpoint *****\n");
-      if(rr == 2)
+      if(rr == DMTCP_AFTER_RESTART)
 	printf("***** after restart *****\n");
     }else{
       printf(" dmtcp disabled -- nevermind\n");
