@@ -45,6 +45,7 @@ dmtcp_command.*
 ckpt_mpi_count_*_files
 perfectNumbers.h5
 perfectNumbers.h5.bak
+perfectNumbers.h5.save
 
 #
 # Job files

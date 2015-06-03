@@ -98,6 +98,7 @@ int main (int argc, char **argv)
     new_evens = new_odds = 0;
     do {
       perf_update_loopbody(index);
+      counter++;
     } while ((counter % MPI_CHUNK_SIZE) != 0);
     // Synchronize metadata state and then save state
     broadcast_state();
@@ -116,7 +117,6 @@ int main (int argc, char **argv)
 }
 
 
-
 //
 // Interior of do-while loop and also used in restore function;
 // checks for perfect numbers and updates process-local state
@@ -133,7 +133,6 @@ void perf_update_loopbody(int index) {
     }
   } // end [if (perfect_diff(count) == 0)]
   //perf_diffs[index] = count; //For DEBUG of output
-  counter++;
 }
 
 //
@@ -196,6 +195,8 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   hsize_t     attr_dimsf[] = {1}; 
   herr_t      status;
 
+  big_int fillvalue = 0;
+
   // Only need to backup once per checkpoint
   if (mpi_rank == 0) {
     if( access( H5FILE_NAME, F_OK ) != -1 ) {
@@ -254,6 +255,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   //
   dset_plist_create_id = H5Pcreate (H5P_DATASET_CREATE);
   status = H5Pset_chunk (dset_plist_create_id, RANK, chunkdims);
+  status = H5Pset_fill_value(dset_plist_create_id, big_int_h5, &fillvalue);
   dset_id = H5Dcreate (file_id, DATASETNAME, big_int_h5, filespace,
 		       H5P_DEFAULT, dset_plist_create_id, H5P_DEFAULT);
   assert(dset_id != HDF_FAIL);
@@ -261,8 +263,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   //
   // Select this process's hyperslab
   //
-  H5Sselect_hyperslab(filespace, H5S_SELECT_SET, 
-                      start, stride, count, block);
+  H5Sselect_hyperslab(filespace, H5S_SELECT_SET, start, stride, count, block);
 
   //
   // Set up (collective) dataset-write property list
