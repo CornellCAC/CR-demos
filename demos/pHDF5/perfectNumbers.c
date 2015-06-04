@@ -8,6 +8,7 @@
 #include "hdf5.h"
 
 #include <assert.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
@@ -197,6 +198,16 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
 
   big_int fillvalue = 0;
 
+  //
+  // Need to block terminating signals during I/O
+  // Not threadsafe; for threads, use alterantive like pthread_sigmask
+  //
+  sigset_t sig_list;
+  sigemptyset (&sig_list);
+  sigaddset(&sig_list, SIGINT);
+  sigaddset(&sig_list, SIGTERM);
+  sigprocmask(SIG_BLOCK, &sig_list, NULL);
+
   // Only need to backup once per checkpoint
   if (mpi_rank == 0) {
     if( access( H5FILE_NAME, F_OK ) != -1 ) {
@@ -289,6 +300,9 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   H5Sclose(memspace);
   H5Sclose(filespace);
   H5Fclose(file_id);
+
+  // I/O finished; resume handling of cancellation signals
+  sigprocmask(SIG_UNBLOCK, &sig_list, NULL);
 
   return status;
 }
