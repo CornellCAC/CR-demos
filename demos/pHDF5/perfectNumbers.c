@@ -357,6 +357,9 @@ herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   filespace = H5Dget_space(dset_id);
   H5Sget_simple_extent_dims(filespace, dimsf, NULL);
 
+  //DEBUG
+  printf("f: %d\n", dimsf[0]);
+
   //
   // Update dimensions and dataspaces as appropriate
   //
