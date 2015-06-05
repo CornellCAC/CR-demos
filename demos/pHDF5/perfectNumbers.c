@@ -20,9 +20,7 @@
 #define STATUSGROUP 	"status"
 #define RANK            1   
 
-#define MPI_CHUNK_SIZE 10
-//For DEBUG:
-//#define MPI_CHUNK_SIZE 10
+#define MPI_CHUNK_SIZE 100
 
 #define HDF_FAIL -1
 
@@ -45,7 +43,7 @@ MPI_Request perf_diffs_request     = MPI_REQUEST_NULL;
 // State variables
 // 
 big_int     *perf_diffs = NULL;   /* pointer to data buffer to write */
-big_int     counter, chunk_counter;
+big_int     counter, chunk_counter, current_size;
 big_int     num_odd, num_even;
 big_int     new_odds, new_evens;
 
@@ -62,7 +60,7 @@ big_int* alloc_and_init(big_int *data, big_int realloc_size);
 
 herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs);
 
-herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs);
+herr_t restore(MPI_Comm comm, MPI_Info info);
 
 int broadcast_state();
 
@@ -74,7 +72,6 @@ int main (int argc, char **argv)
 {
   int         index;
   big_int     realloc_size;
-  big_int     current_size;
   /*
    * Initialize MPI
    */
@@ -85,17 +82,18 @@ int main (int argc, char **argv)
   num_even = 0;
   num_odd = 0;
   chunk_counter = 0;
-  // Initialize data offsets for each MPI process
-  counter = MPI_CHUNK_SIZE * mpi_rank;
 
   // Restore if prior h5 file exists:
   if( access( H5FILE_NAME, F_OK ) != -1 ) {
-    restore(comm, info, perf_diffs);
-  }
-  while(true) {
+    restore(comm, info);
+  } else {
+    // Initialize data offsets for each MPI process
+    counter = MPI_CHUNK_SIZE * mpi_rank;
     chunk_counter++;
     current_size = chunk_counter * MPI_CHUNK_SIZE;
     perf_diffs = alloc_and_init(perf_diffs, current_size);  
+  }
+  while(true) {
     new_evens = new_odds = 0;
     do {
       perf_update_loopbody(index);
@@ -105,9 +103,13 @@ int main (int argc, char **argv)
     broadcast_state();
     num_even += new_evens;
     num_odd  += new_odds;
-    checkpoint(comm, info, perf_diffs);    
+    checkpoint(comm, info, perf_diffs);
     // offset into next iteration
     counter += (mpi_size - 1) * MPI_CHUNK_SIZE;
+    //
+    chunk_counter++;
+    current_size = chunk_counter * MPI_CHUNK_SIZE;
+    perf_diffs = alloc_and_init(perf_diffs, current_size);     
   } // end [while(true)]
 
   free(perf_diffs);
@@ -122,7 +124,7 @@ int main (int argc, char **argv)
 // Interior of do-while loop and also used in restore function;
 // checks for perfect numbers and updates process-local state
 //
-void perf_update_loopbody(int index) {
+void perf_update_loopbody(int index) {  
   index = MPI_CHUNK_SIZE * (chunk_counter-1) + counter % MPI_CHUNK_SIZE;
   perf_diffs[index] = perfect_diff(counter);
   if (perf_diffs[index] == 0) {
@@ -133,7 +135,8 @@ void perf_update_loopbody(int index) {
       new_odds++;
     }
   } // end [if (perfect_diff(count) == 0)]
-  //perf_diffs[index] = count; //For DEBUG of output
+  //DEBUG: for illustrative puproses, just write out ints in order
+  //perf_diffs[index] = counter;
 }
 
 //
@@ -148,6 +151,7 @@ big_int* alloc_and_init(big_int *data, big_int realloc_size) {
     // Could not reallocate, checkpoint and exit
     fprintf(stderr, "Couldn't allocate more space for data!\n");
     fflush(stdout);
+    checkpoint(comm, info, perf_diffs);
     free(data);
     MPI_Finalize();
     exit(-1);
@@ -307,7 +311,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   return status;
 }
 
-herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
+herr_t restore(MPI_Comm comm, MPI_Info info) {
 
   //
   // HDF5 APIs definitions
@@ -357,15 +361,14 @@ herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   filespace = H5Dget_space(dset_id);
   H5Sget_simple_extent_dims(filespace, dimsf, NULL);
 
-  //DEBUG
-  printf("f: %d\n", dimsf[0]);
-
   //
   // Update dimensions and dataspaces as appropriate
   //
   chunk_counter = get_restore_chunk_counter(dimsf[0]);
   count[0] = chunk_counter;
   dimsm[0] = chunk_counter * MPI_CHUNK_SIZE;
+  counter = ((chunk_counter - 1) * mpi_size + mpi_rank) * MPI_CHUNK_SIZE;
+  current_size = dimsm[0];
   dimsf[0] = dimsm[0] * mpi_size;
   status = H5Dset_extent(dset_id, dimsf);
   assert(status != HDF_FAIL);
@@ -375,9 +378,6 @@ herr_t restore(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   //
   memspace = H5Screate_simple(RANK, dimsm, NULL); 
   perf_diffs = alloc_and_init(perf_diffs, dimsm[0]);
-
-  //DEBUG
-  printf("m, f, count,: %d, %d, %d\n", dimsm[0], dimsf[0], count[0]);
 
   //
   // Open status group
