@@ -20,7 +20,8 @@ int main(int argc, char* argv[])
   {
     if(dmtcp_is_enabled()){
       dmtcp_get_local_status(&numCheckpoints, &numRestarts);
-      printf("on iteration %d: this process has checkpointed %d times and restarted %d times\n",
+      printf("on iteration %d: this process has checkpointed"
+             " %d times and restarted %d times\n",
              ++count, numCheckpoints, numRestarts);
     }else{
       printf("on iteration %d; DMTCP not enabled!\n", ++count);

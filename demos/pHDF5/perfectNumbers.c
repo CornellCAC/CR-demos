@@ -121,8 +121,9 @@ int main (int argc, char **argv)
 
 
 //
-// Interior of do-while loop and also used in restore function;
-// checks for perfect numbers and updates process-local state
+// Interior of do-while loop (and potentially elsewhere
+// (depending on how you implement C/R).
+// Checks for perfect numbers and updates process-local state.
 //
 void perf_update_loopbody(int index) {  
   index = MPI_CHUNK_SIZE * (chunk_counter-1) + counter % MPI_CHUNK_SIZE;
@@ -250,15 +251,17 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   //
   num_even_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
   num_even_id = H5Acreate(status_id, "Number of even perfect numbers found", 
-			  big_int_h5, num_even_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+			  big_int_h5, num_even_dataspace_id, H5P_DEFAULT, 
+                          H5P_DEFAULT);
   status = H5Awrite(num_even_id, big_int_h5, &num_even);
   assert(status != HDF_FAIL);
   status = H5Aclose(num_even_id);
   status = H5Sclose(num_even_dataspace_id);
   //
   num_odd_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
-  num_odd_id = H5Acreate(status_id, "Number of odd perfect numbers found", big_int_h5, 
-			 num_odd_dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+  num_odd_id = H5Acreate(status_id, "Number of odd perfect numbers found",
+			 big_int_h5,num_odd_dataspace_id, H5P_DEFAULT, 
+                         H5P_DEFAULT);
   status = H5Awrite(num_odd_id, big_int_h5, &num_odd);
   assert(status != HDF_FAIL);
   status = H5Aclose(num_odd_id);
