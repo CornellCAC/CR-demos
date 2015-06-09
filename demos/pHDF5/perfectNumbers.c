@@ -251,7 +251,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   //
   num_even_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
   num_even_id = H5Acreate(status_id, "Number of even perfect numbers found", 
-			  big_int_h5, num_even_dataspace_id, H5P_DEFAULT, 
+                          big_int_h5, num_even_dataspace_id, H5P_DEFAULT, 
                           H5P_DEFAULT);
   status = H5Awrite(num_even_id, big_int_h5, &num_even);
   assert(status != HDF_FAIL);
@@ -260,7 +260,7 @@ herr_t checkpoint(MPI_Comm comm, MPI_Info info, big_int* perf_diffs) {
   //
   num_odd_dataspace_id = H5Screate_simple(1, attr_dimsf, NULL);
   num_odd_id = H5Acreate(status_id, "Number of odd perfect numbers found",
-			 big_int_h5,num_odd_dataspace_id, H5P_DEFAULT, 
+                         big_int_h5,num_odd_dataspace_id, H5P_DEFAULT, 
                          H5P_DEFAULT);
   status = H5Awrite(num_odd_id, big_int_h5, &num_odd);
   assert(status != HDF_FAIL);
