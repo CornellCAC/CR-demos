@@ -41,8 +41,11 @@ def perfect_diff(n):
             divisor_sum += i
     return divisor_sum - n
 
-def broadcast_state():
-    return True
+def broadcast_state(comm, new_evens, new_odds):
+    mpi_type = MPI.__TypeDict__[new_evens.dtype.char]
+    comm.Allreduce(MPI.IN_PLACE, [new_evens, mpi_type], op=MPI.SUM)
+    comm.Allreduce(MPI.IN_PLACE, [new_odds,  mpi_type], op=MPI.SUM)
+    return 0
 
 
 def main(argv=None):
@@ -61,9 +64,12 @@ def main(argv=None):
     chunk_counter += 1
     current_size = chunk_counter * MPI_CHUNK_SIZE    
     perf_diffs = np.zeros(current_size, dtype=int)
+    new_evens = np.zeros(1, dtype=int)
+    new_odds = np.zeros(1, dtype=int)
 
     while True:
-        new_evens = new_odds = 0
+        new_evens[0] = 0
+        new_odds[0] = 0
         while True:
             index = MPI_CHUNK_SIZE * (chunk_counter-1) + counter % MPI_CHUNK_SIZE
             perf_diffs[index] = perfect_diff(counter) 
@@ -71,15 +77,15 @@ def main(argv=None):
             if (perf_diffs[index] == 0):
                 print("Found %d!\n" % counter)
                 if counter % 2 == 0:
-                    new_evens += 1
+                    new_evens[0] += 1
                 else:
-                    new_odds += 1
+                    new_odds[0] += 1
             counter += 1
             if counter % MPI_CHUNK_SIZE == 0:
                 break
-        broadcast_state()
-        num_even += new_evens
-        num_odd  += new_odds
+        broadcast_state(comm, new_evens, new_odds)
+        num_even += new_evens[0]
+        num_odd  += new_odds[0]
         # checkpoint(comm, info, perf_diffs)
         # offset into next iteration
         counter += (mpi_size - 1) * MPI_CHUNK_SIZE
