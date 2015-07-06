@@ -33,3 +33,13 @@ section of the [Python for High
 Performance](https://www.cac.cornell.edu/VW/python/) module.  For
 development purposes and to get going, the above instructions should
 be fine.
+
+In some cases, `pip install h5py` will not work, since it won't
+be configured to use MPI (or more precisely, mpi4py). You can
+download the h5py archive manually and install to get things
+up and running quickly. Once extracted, just do:
+
+```
+python setup.py configure --mpi
+echo "export CC=mpicc; python setup.py install" | sudo sh
+```

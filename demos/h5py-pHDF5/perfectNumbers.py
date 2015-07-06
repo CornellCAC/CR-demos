@@ -3,6 +3,7 @@
 #TODO: Remove MPI from this to make it as simple as possible for
 #first version
 
+import os
 import sys
 
 import h5py
@@ -18,13 +19,22 @@ DATASETNAME    = "DifferenceFromPerfect"
 STATUSGROUP    = "status"
 RANK           = 1   
 
+
 MPI_CHUNK_SIZE = 100
+
+#
+# State variables
+#
+chunk_counter = 0
 
 #
 # MPI variables
 #
 
 comm = MPI.COMM_WORLD
+info = MPI.INFO_NULL
+mpi_rank = comm.Get_rank()
+mpi_size = comm.Get_size()
 
 # Tells if a given integer is a perfect number by returning the
 # difference between itself and the sum of its
@@ -47,17 +57,41 @@ def broadcast_state(comm, new_evens, new_odds):
     comm.Allreduce(MPI.IN_PLACE, [new_odds,  mpi_type], op=MPI.SUM)
     return 0
 
+def backup_file():
+    os.system(BACKUP_CMD)
+
+def checkpoint(comm, info, perf_diffs):
+    dimsm  = (chunk_counter * MPI_CHUNK_SIZE,)
+    dimsf  = (dimsm[0] * mpi_size,)
+
+    start  = mpi_rank * MPI_CHUNK_SIZE
+    end    = (mpi_rank + 1) * MPI_CHUNK_SIZE
+    count  = chunk_counter
+    stride = MPI_CHUNK_SIZE * mpi_size
+
+    if mpi_rank == 0:
+        if os.path.isfile(H5FILE_NAME):
+            backup_file()
+
+    file_id = h5py.File(H5FILE_NAME, "w", driver="mpio", comm=comm)
+    dset_id = file_id.create_dataset(DATASETNAME, shape=dimsf, dtype='i8')
+    print "index params :%d:%d:%d" % (start, end, stride)
+    print str(perf_diffs)[1:-1]
+    #perf_diffs2 = perf_diffs[start:end:stride]
+    #print str(perf_diffs2)[1:-1]
+    dset_id[start:end] = perf_diffs[start:end]
+    
+    file_id.close()
+    sys.exit(0)
 
 def main(argv=None):
     if argv is None:
         argv = sys.argv
 
-    mpi_rank = comm.Get_rank()
-    mpi_size = comm.Get_size()
+    global chunk_counter
 
     num_even = 0
     num_odd = 0
-    chunk_counter = 0
 
     #If not restored (TODO)
     counter = MPI_CHUNK_SIZE * mpi_rank
@@ -73,20 +107,20 @@ def main(argv=None):
         while True:
             index = MPI_CHUNK_SIZE * (chunk_counter-1) + counter % MPI_CHUNK_SIZE
             perf_diffs[index] = perfect_diff(counter) 
-            # perf_diffs[index] = counter # For DEBUG
             if (perf_diffs[index] == 0):
                 print("Found %d!\n" % counter)
                 if counter % 2 == 0:
                     new_evens[0] += 1
                 else:
                     new_odds[0] += 1
+            perf_diffs[index] = counter # For DEBUG
             counter += 1
             if counter % MPI_CHUNK_SIZE == 0:
                 break
         broadcast_state(comm, new_evens, new_odds)
         num_even += new_evens[0]
         num_odd  += new_odds[0]
-        # checkpoint(comm, info, perf_diffs)
+        checkpoint(comm, info, perf_diffs)
         # offset into next iteration
         counter += (mpi_size - 1) * MPI_CHUNK_SIZE
         chunk_counter += 1
