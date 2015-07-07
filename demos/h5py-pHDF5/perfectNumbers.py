@@ -65,9 +65,7 @@ def checkpoint(comm, info, perf_diffs):
     dimsf  = (dimsm[0] * mpi_size,)
 
     start  = mpi_rank * MPI_CHUNK_SIZE
-    end    = (mpi_rank + 1) * MPI_CHUNK_SIZE
-    count  = chunk_counter
-    stride = MPI_CHUNK_SIZE * mpi_size
+    end    = start + MPI_CHUNK_SIZE
 
     if mpi_rank == 0:
         if os.path.isfile(H5FILE_NAME):
@@ -75,14 +73,20 @@ def checkpoint(comm, info, perf_diffs):
 
     file_id = h5py.File(H5FILE_NAME, "w", driver="mpio", comm=comm)
     dset_id = file_id.create_dataset(DATASETNAME, shape=dimsf, dtype='i8')
-    print "index params :%d:%d:%d" % (start, end, stride)
+    print dset_id.shape
+    print "\n"
+    print "index params %d:%d:%d:%d\n" % (mpi_rank, start, end, dimsf[0])
     print str(perf_diffs)[1:-1]
-    #perf_diffs2 = perf_diffs[start:end:stride]
-    #print str(perf_diffs2)[1:-1]
-    dset_id[start:end] = perf_diffs[start:end]
+
+    for ii in range(0, chunk_counter):
+        start_ii = start + ii*mpi_size*MPI_CHUNK_SIZE
+        end_ii   = start_ii + MPI_CHUNK_SIZE
+        dset_id[start_ii:end_ii] = perf_diffs[ii*MPI_CHUNK_SIZE:(ii+1)*MPI_CHUNK_SIZE]
     
     file_id.close()
-    sys.exit(0)
+
+    if chunk_counter > 2:
+        sys.exit(0)
 
 def main(argv=None):
     if argv is None:
