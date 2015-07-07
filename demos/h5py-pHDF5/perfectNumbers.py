@@ -4,6 +4,7 @@
 #first version
 
 import os
+import signal
 import sys
 
 import h5py
@@ -26,6 +27,7 @@ MPI_CHUNK_SIZE = 100
 # State variables
 #
 chunk_counter = 0
+sig_exit      = False
 
 #
 # MPI variables
@@ -60,6 +62,10 @@ def broadcast_state(comm, new_evens, new_odds):
 def backup_file():
     os.system(BACKUP_CMD)
 
+def sig_safe_handler(signal, frame):
+    global sig_exit
+    sig_exit = True
+
 def checkpoint(comm, info, perf_diffs):
     dimsm  = (chunk_counter * MPI_CHUNK_SIZE,)
     dimsf  = (dimsm[0] * mpi_size,)
@@ -67,26 +73,30 @@ def checkpoint(comm, info, perf_diffs):
     start  = mpi_rank * MPI_CHUNK_SIZE
     end    = start + MPI_CHUNK_SIZE
 
+    signal.signal(signal.SIGINT,  sig_safe_handler)
+    signal.signal(signal.SIGTERM, sig_safe_handler)
+
     if mpi_rank == 0:
         if os.path.isfile(H5FILE_NAME):
             backup_file()
 
     file_id = h5py.File(H5FILE_NAME, "w", driver="mpio", comm=comm)
     dset_id = file_id.create_dataset(DATASETNAME, shape=dimsf, dtype='i8')
-    print dset_id.shape
-    print "\n"
-    print "index params %d:%d:%d:%d\n" % (mpi_rank, start, end, dimsf[0])
-    print str(perf_diffs)[1:-1]
 
     for ii in range(0, chunk_counter):
         start_ii = start + ii*mpi_size*MPI_CHUNK_SIZE
         end_ii   = start_ii + MPI_CHUNK_SIZE
         dset_id[start_ii:end_ii] = perf_diffs[ii*MPI_CHUNK_SIZE:(ii+1)*MPI_CHUNK_SIZE]
     
+    signal.signal(signal.SIGINT,  signal.SIG_DFL)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    if sig_exit:
+        file_id.flush()
+        file_id.close()
+        sys.exit(0)
     file_id.close()
 
-    if chunk_counter > 2:
-        sys.exit(0)
+
 
 def main(argv=None):
     if argv is None:
