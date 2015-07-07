@@ -18,6 +18,9 @@ H5FILE_BACKUP  = "perfectNumbers.h5.bak"
 BACKUP_CMD     = "/bin/cp " + H5FILE_NAME + " " + H5FILE_BACKUP
 DATASETNAME    = "DifferenceFromPerfect"
 STATUSGROUP    = "status"
+NUM_EVEN_ATTR  = "Number of even perfect numbers found"
+NUM_ODD_ATTR   = "Number of odd perfect numbers found"
+
 RANK           = 1   
 
 
@@ -28,8 +31,10 @@ MPI_CHUNK_SIZE = 100
 #
 num_even = 0
 num_odd  = 0
+perf_diffs = np.zeros(0, dtype=int)
 #
 chunk_counter = 0
+current_size  = 0
 sig_exit      = False
 
 #
@@ -69,7 +74,20 @@ def sig_safe_handler(signal, frame):
     global sig_exit
     sig_exit = True
 
-def checkpoint(comm, info, perf_diffs):
+#
+# Calculates the number of chunks to allocate
+# upon a restore
+#
+def get_restore_chunk_counter(datasize):
+    total_chunks = datasize / MPI_CHUNK_SIZE
+    if ((datasize % MPI_CHUNK_SIZE) != 0):
+        total_chunks += 1
+    if ((total_chunks % mpi_size) != 0):
+        return total_chunks / mpi_size + 1
+    else:
+        return total_chunks / mpi_size
+
+def checkpoint(comm, info):
     dimsm  = (chunk_counter * MPI_CHUNK_SIZE,)
     dimsf  = (dimsm[0] * mpi_size,)
 
@@ -87,8 +105,8 @@ def checkpoint(comm, info, perf_diffs):
     dset_id = file_id.create_dataset(DATASETNAME, shape=dimsf, dtype='i8')
 
     status_id = file_id.create_group(STATUSGROUP)
-    status_id.attrs["Number of even perfect numbers found"] = num_even
-    status_id.attrs["Number of odd perfect numbers found"]  = num_odd
+    status_id.attrs[NUM_EVEN_ATTR] = num_even
+    status_id.attrs[NUM_ODD_ATTR]  = num_odd
 
     for ii in range(0, chunk_counter):
         start_ii = start + ii*mpi_size*MPI_CHUNK_SIZE
@@ -103,27 +121,57 @@ def checkpoint(comm, info, perf_diffs):
         sys.exit(0)
     file_id.close()
 
+def restore(comm, info):
+    global chunk_counter
+    global counter
+    global current_size
+    global num_even
+    global num_odd
+    global perf_diffs
 
+    start = mpi_rank * MPI_CHUNK_SIZE
+
+    file_id = h5py.File(H5FILE_NAME, "r", driver="mpio", comm=comm)    
+    dset_id = file_id[DATASETNAME]
+    dimsf = dset_id.shape
+    chunk_counter = get_restore_chunk_counter(dimsf[0])
+    dimsm = (chunk_counter * MPI_CHUNK_SIZE,)
+    counter = ((chunk_counter - 1) * mpi_size + mpi_rank) * MPI_CHUNK_SIZE
+    current_size = dimsm[0]
+    perf_diffs.resize(current_size)
+
+    for ii in range(0, chunk_counter):
+        start_ii = start + ii*mpi_size*MPI_CHUNK_SIZE
+        end_ii   = start_ii + MPI_CHUNK_SIZE
+        perf_diffs[ii*MPI_CHUNK_SIZE:(ii+1)*MPI_CHUNK_SIZE] = dset_id[start_ii:end_ii]
+    num_even = file_id[STATUSGROUP].attrs[NUM_EVEN_ATTR]
+    num_odd  = file_id[STATUSGROUP].attrs[NUM_ODD_ATTR]
+
+    file_id.close()
 
 def main(argv=None):
     if argv is None:
         argv = sys.argv
 
     global chunk_counter
+    global counter
+    global current_size
     global num_even
     global num_odd
+    global perf_diffs
 
-    #If not restored (TODO)
-    counter = MPI_CHUNK_SIZE * mpi_rank
-    chunk_counter += 1
-    current_size = chunk_counter * MPI_CHUNK_SIZE    
-    perf_diffs = np.zeros(current_size, dtype=int)
-    new_evens = np.zeros(1, dtype=int)
-    new_odds = np.zeros(1, dtype=int)
+    #Restore if prior file exists:
+    if os.path.isfile(H5FILE_NAME):
+        restore(comm, info)
+    else:
+        counter = MPI_CHUNK_SIZE * mpi_rank
+        chunk_counter += 1
+        current_size  = chunk_counter * MPI_CHUNK_SIZE
+        perf_diffs.resize(current_size)
 
     while True:
-        new_evens[0] = 0
-        new_odds[0] = 0
+        new_evens = np.zeros(1, dtype=int)
+        new_odds = np.zeros(1, dtype=int)
         while True:
             index = MPI_CHUNK_SIZE * (chunk_counter-1) + counter % MPI_CHUNK_SIZE
             perf_diffs[index] = perfect_diff(counter) 
@@ -140,7 +188,7 @@ def main(argv=None):
         broadcast_state(comm, new_evens, new_odds)
         num_even += new_evens[0]
         num_odd  += new_odds[0]
-        checkpoint(comm, info, perf_diffs)
+        checkpoint(comm, info)
         # offset into next iteration
         counter += (mpi_size - 1) * MPI_CHUNK_SIZE
         chunk_counter += 1
