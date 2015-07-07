@@ -26,6 +26,9 @@ MPI_CHUNK_SIZE = 100
 #
 # State variables
 #
+num_even = 0
+num_odd  = 0
+#
 chunk_counter = 0
 sig_exit      = False
 
@@ -83,6 +86,10 @@ def checkpoint(comm, info, perf_diffs):
     file_id = h5py.File(H5FILE_NAME, "w", driver="mpio", comm=comm)
     dset_id = file_id.create_dataset(DATASETNAME, shape=dimsf, dtype='i8')
 
+    status_id = file_id.create_group(STATUSGROUP)
+    status_id.attrs["Number of even perfect numbers found"] = num_even
+    status_id.attrs["Number of odd perfect numbers found"]  = num_odd
+
     for ii in range(0, chunk_counter):
         start_ii = start + ii*mpi_size*MPI_CHUNK_SIZE
         end_ii   = start_ii + MPI_CHUNK_SIZE
@@ -103,9 +110,8 @@ def main(argv=None):
         argv = sys.argv
 
     global chunk_counter
-
-    num_even = 0
-    num_odd = 0
+    global num_even
+    global num_odd
 
     #If not restored (TODO)
     counter = MPI_CHUNK_SIZE * mpi_rank

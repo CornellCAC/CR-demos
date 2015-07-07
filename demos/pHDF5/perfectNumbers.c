@@ -35,9 +35,9 @@ int mpi_size, mpi_rank;
 MPI_Comm comm  = MPI_COMM_WORLD;
 MPI_Info info  = MPI_INFO_NULL;
 MPI_Status status;
-MPI_Request num_even_request  = MPI_REQUEST_NULL;
-MPI_Request num_odd_request   = MPI_REQUEST_NULL;
-MPI_Request perf_diffs_request     = MPI_REQUEST_NULL;
+MPI_Request num_even_request    = MPI_REQUEST_NULL;
+MPI_Request num_odd_request     = MPI_REQUEST_NULL;
+MPI_Request perf_diffs_request  = MPI_REQUEST_NULL;
 
 //
 // State variables
