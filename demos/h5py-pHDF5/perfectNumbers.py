@@ -1,8 +1,5 @@
 #!/usr/bin/python
 
-#TODO: Remove MPI from this to make it as simple as possible for
-#first version
-
 import os
 import signal
 import sys
@@ -22,8 +19,6 @@ NUM_EVEN_ATTR  = "Number of even perfect numbers found"
 NUM_ODD_ATTR   = "Number of odd perfect numbers found"
 
 RANK           = 1   
-
-
 MPI_CHUNK_SIZE = 100
 
 #
@@ -34,6 +29,7 @@ num_odd  = 0
 perf_diffs = np.zeros(0, dtype=int)
 #
 chunk_counter = 0
+counter       = 0
 current_size  = 0
 sig_exit      = False
 
@@ -46,14 +42,6 @@ info = MPI.INFO_NULL
 mpi_rank = comm.Get_rank()
 mpi_size = comm.Get_size()
 
-# Tells if a given integer is a perfect number by returning the
-# difference between itself and the sum of its
-# divisors (excluding itself); if the diff is 0, it is perfect.
-# 
-# This is toy code. Odd perfect numbers are currently being searched
-# for above 10^300: http://www.oddperfect.org
-# Also see : http://rosettacode.org/wiki/Perfect_numbers
-#          : http://en.wikipedia.org/wiki/List_of_perfect_numbers
 def perfect_diff(n):
     divisor_sum = 0
     for i in range(1, n): 
