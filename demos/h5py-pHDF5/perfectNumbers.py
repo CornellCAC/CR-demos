@@ -8,8 +8,6 @@ import h5py
 import numpy as np
 from mpi4py import MPI
 
-#TODO: figure out how to block system calls?
-
 H5FILE_NAME    = "perfectNumbers.h5"
 H5FILE_BACKUP  = "perfectNumbers.h5.bak"
 BACKUP_CMD     = "/bin/cp " + H5FILE_NAME + " " + H5FILE_BACKUP
