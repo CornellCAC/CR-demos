@@ -150,7 +150,14 @@ export CPPFLAGS="$CPPFLAGS -I/opt/apps/intel15/mvapich2_2_1/phdf5/1.8.14/x86_64/
 export "LDFLAGS=$LDFLAGS -L/opt/apps/intel15/mvapich2_2_1/phdf5/1.8.14/x86_64/lib"
 ```
 
-Now, you should finally have a working h5py installation! 
+Before running again, we want to make absolutely sure we are using our local libraries,
+particularly h5py, so let's adjust `PYTHONPATH` so it sees our local packages *first*:
+
+```
+export PYTHONPATH=$HOME/virtualenv/phdf5-intel15/lib/python2.7/site-packages:$PYTHONPATH
+```
+
+Now try to run `python setup.py install` and you should hopefully have a working h5py installation! 
 Try running the `perfectNumbers.py` script again.
 How to deal with Python modules and libraries on an HPC system is 
 a bit of a moving target, so if the above doesn't work, you may want to consider consulting
