@@ -41,8 +41,8 @@ mpi_rank = comm.Get_rank()
 mpi_size = comm.Get_size()
 
 def perfect_diff(n):
-    divisor_sum = 0
-    for i in range(1, n): 
+    divisor_sum = 1
+    for i in range(2, n/2 + 1): 
         if n % i == 0:
             divisor_sum += i
     return divisor_sum - n

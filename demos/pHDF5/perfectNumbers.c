@@ -445,9 +445,9 @@ herr_t restore(MPI_Comm comm, MPI_Info info) {
 // Also see : http://rosettacode.org/wiki/Perfect_numbers
 //          : http://en.wikipedia.org/wiki/List_of_perfect_numbers
 big_int perfect_diff(big_int n) {
-  big_int divisor_sum = 0;
+  big_int divisor_sum = 1;
   big_int i;
-  for (i = 1; i < n; i++) {
+  for (i = 2; i <= n/2; i++) {
     if (n % i == 0) {
       divisor_sum += i;
     }
