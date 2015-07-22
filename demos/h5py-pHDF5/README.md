@@ -78,7 +78,11 @@ python perfectNumbers.py
 
 
 If you have a library loading problem, you may need to manually correct the library path. For instance,
-the following error tells us python can't find the hdf5 library:
+the following error tells us python can't find the hdf5 library: 
+
+```
+FIXME
+```
 
 Let's add it to our environment's path:
 
