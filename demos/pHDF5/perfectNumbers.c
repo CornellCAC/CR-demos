@@ -1,8 +1,3 @@
-/*  
- *  This example writes data to the HDF5 file.
- *  Number of processes is assumed to be 1 or multiples of 2 (up to 8)
- */
-
 #include "mpi.h"
  
 #include "hdf5.h"
