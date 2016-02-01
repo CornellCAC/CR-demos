@@ -109,6 +109,14 @@ cd $SLURM_SUBMIT_DIR
 
 #------------------------------------- Launch application ---------------------#
 
+
+###############################################################################
+# If you use the Stampede supercomputer at Texas Advanced Computing Center
+# (TACC), add the following:
+HOSTFILE=hostfile
+echo "SLURM_JOB_NODELIST" | scontrol show hostname > $HOSTFILE
+###############################################################################
+
 ################################################################################
 # 1. Start DMTCP coordinator
 ################################################################################
@@ -131,4 +139,4 @@ start_coordinator # -i 120 ... <put dmtcp coordinator options here>
 
 #dmtcp_launch --rm mpirun --mca btl self,tcp ./<your binary>
 
-ibrun dmtcp_launch --no-gzip --ckpt-signal 10 --ib ./mpi_count
+/bin/bash ./dmtcp_restart_script.sh -h $DMTCP_COORD_HOST -p $DMTCP_COORD_PORT --hostfile $HOSTFILE
