@@ -22,6 +22,9 @@
 # for JOBID job.
 ###############################################################################
 
+#
+# Set as follows on Stampede:
+#
 export MV2_SMP_USE_CMA=0
 
 start_coordinator()
