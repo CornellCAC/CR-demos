@@ -8,6 +8,7 @@ import h5py
 import numpy as np
 from mpi4py import MPI
 
+# ###    declarations and global variables    ###
 H5FILE_NAME    = "perfectNumbers.h5"
 H5FILE_BACKUP  = "perfectNumbers.h5.bak"
 BACKUP_CMD     = "/bin/cp " + H5FILE_NAME + " " + H5FILE_BACKUP
@@ -155,9 +156,15 @@ def main(argv=None):
         current_size  = chunk_counter * MPI_CHUNK_SIZE
         perf_diffs.resize(current_size)
 
+    # We also need to loop over positive integers. This could be simple,
+    # but due to the need to split up the work between multiple MPI processes
+    # and save data, our while loop grows in complexity:
+
+    #Loop over chunks of size MPI_CHUNK_SIZE and checkpoint each time
     while True:
         new_evens = np.zeros(1, dtype=int)
         new_odds = np.zeros(1, dtype=int)
+        # Loop over individual integers (defined by counter)
         while True:
             index = MPI_CHUNK_SIZE * (chunk_counter-1) + counter % MPI_CHUNK_SIZE
             perf_diffs[index] = perfect_diff(counter) 
